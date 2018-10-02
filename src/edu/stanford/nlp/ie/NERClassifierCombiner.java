@@ -290,6 +290,10 @@ public class NERClassifierCombiner extends ClassifierCombiner<CoreLabel>  {
   private static <INN extends CoreMap> void copyAnswerFieldsToNERField(List<INN> l) {
     for (INN m: l) {
       m.set(CoreAnnotations.NamedEntityTagAnnotation.class, m.get(CoreAnnotations.AnswerAnnotation.class));
+      Map<String,Double> labelToProb =
+          Collections.singletonMap(m.get(CoreAnnotations.NamedEntityTagAnnotation.class),
+              m.get(CoreAnnotations.AnswerProbAnnotation.class));
+      m.set(CoreAnnotations.NamedEntityTagProbsAnnotation.class, labelToProb);
     }
   }
 
@@ -344,19 +348,7 @@ public class NERClassifierCombiner extends ClassifierCombiner<CoreLabel>  {
       // AnswerAnnotation -> NERAnnotation
       copyAnswerFieldsToNERField(output);
     }
-
-    // Apply RegexNER annotations
-    // cdm 2016: Used to say and do "// skip first token" but I couldn't understand why, so I removed that.
-    for (CoreLabel token : tokens) {
-      // System.out.println(token.toShorterString());
-      if ((token.tag() == null || token.tag().charAt(0) == 'N') && "O".equals(token.ner()) || "MISC".equals(token.ner())) {
-        String target = gazetteMapping.get(token.originalText());
-        if (target != null) {
-          token.setNER(target);
-        }
-      }
-    }
-
+    
     // Return
     return output;
   }
