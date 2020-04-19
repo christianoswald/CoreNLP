@@ -1,5 +1,4 @@
 package edu.stanford.nlp.tagger.maxent; 
-import edu.stanford.nlp.util.logging.Redwood;
 
 import java.io.IOException;
 import java.util.List;
@@ -10,6 +9,7 @@ import edu.stanford.nlp.tagger.io.TaggedFileRecord;
 import edu.stanford.nlp.util.ConfusionMatrix;
 import edu.stanford.nlp.util.concurrent.MulticoreWrapper;
 import edu.stanford.nlp.util.concurrent.ThreadsafeProcessor;
+import edu.stanford.nlp.util.logging.Redwood;
 
 /** Tags data and can handle either data with gold-standard tags (computing
  *  performance statistics) or unlabeled data.
@@ -58,7 +58,7 @@ public class TestClassifier  {
     fileRecord = TaggedFileRecord.createRecord(config, testFile);
 
     saveRoot = config.getDebugPrefix();
-    if (saveRoot == null || saveRoot.equals("")) {
+    if (saveRoot == null || saveRoot.isEmpty()) {
       saveRoot = fileRecord.filename();
     }
 
@@ -72,7 +72,7 @@ public class TestClassifier  {
   }
 
   private void processResults(TestSentence testS,
-                              PrintFile wordsFile, PrintFile unknDictFile,
+                              PrintFile unknDictFile,
                               PrintFile topWordsFile, boolean verboseResults) {
     numSentences++;
 
@@ -122,19 +122,19 @@ public class TestClassifier  {
       for (List<TaggedWord> taggedSentence : fileRecord.reader()) {
         wrapper.put(taggedSentence);
         while (wrapper.peek()) {
-          processResults(wrapper.poll(), pf, pf1, pf3, verboseResults);
+          processResults(wrapper.poll(), pf1, pf3, verboseResults);
         }
       }
       wrapper.join();
       while (wrapper.peek()) {
-        processResults(wrapper.poll(), pf, pf1, pf3, verboseResults);
+        processResults(wrapper.poll(), pf1, pf3, verboseResults);
       }
     } else{
       for (List<TaggedWord> taggedSentence : fileRecord.reader()) {
         TestSentence testS = new TestSentence(maxentTagger);
         testS.setCorrectTags(taggedSentence);
         testS.tagSentence(taggedSentence, false);
-        processResults(testS, pf, pf1, pf3, verboseResults);
+        processResults(testS, pf1, pf3, verboseResults);
       }
     }
 
@@ -144,7 +144,7 @@ public class TestClassifier  {
   }
 
 
-  String resultsString(MaxentTagger maxentTagger) {
+  public String resultsString(MaxentTagger maxentTagger) {
     StringBuilder output = new StringBuilder();
     output.append(String.format("Model %s has xSize=%d, ySize=%d, and numFeatures=%d.%n",
             maxentTagger.config.getModel(),
@@ -171,6 +171,10 @@ public class TestClassifier  {
     return output.toString();
   }
 
+  public double tagAccuracy() {
+    return (numRight * 100.0) / (numRight + numWrong);
+  }
+
   void printModelAndAccuracy(MaxentTagger maxentTagger) {
     // print the output all at once so that multiple threads don't clobber each other's output
     log.info(resultsString(maxentTagger));
@@ -181,7 +185,7 @@ public class TestClassifier  {
     return numRight + numWrong;
   }
 
-  void setDebug(boolean status) {
+  private void setDebug(boolean status) {
     writeUnknDict = status;
     writeWords = status;
     writeTopWords = status;

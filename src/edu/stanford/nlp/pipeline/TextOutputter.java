@@ -103,6 +103,7 @@ public class TextOutputter extends AnnotationOutputter {
         String[] tokenAnnotations = {
                 "Text", "PartOfSpeech", "Lemma", "Answer", "NamedEntityTag",
                 "CharacterOffsetBegin", "CharacterOffsetEnd", "NormalizedNamedEntityTag",
+                "CodepointOffsetBegin", "CodepointOffsetEnd",
                 "Timex", "TrueCase", "TrueCaseText", "SentimentClass", "WikipediaEntity" };
 
         pw.println();
@@ -118,6 +119,14 @@ public class TextOutputter extends AnnotationOutputter {
           pw.println();
           pw.println("Constituency parse: ");
           options.constituencyTreePrinter.printTree(tree, pw);
+        }
+
+        // display the binary tree for this sentence
+        Tree binaryTree = sentence.get(TreeCoreAnnotations.BinarizedTreeAnnotation.class);
+        if (binaryTree != null) {
+          pw.println();
+          pw.println("Binary Constituency parse: ");
+          options.constituencyTreePrinter.printTree(binaryTree, pw);
         }
 
         // display sentiment tree if they asked for sentiment
@@ -151,9 +160,18 @@ public class TextOutputter extends AnnotationOutputter {
           pw.println();
           pw.println("Extracted the following NER entity mentions:");
           for (CoreMap entityMention : entityMentions) {
+            String nerConfidenceEntry;
+            Map<String,Double> nerConfidences = entityMention.get(CoreAnnotations.NamedEntityTagProbsAnnotation.class);
+            String nerConfidenceKey =
+                    nerConfidences.keySet().size() > 0 ? (String) nerConfidences.keySet().toArray()[0] : "" ;
+            if (!nerConfidenceKey.equals("") && !nerConfidenceKey.equals("O"))
+              nerConfidenceEntry = nerConfidenceKey+":"+Double.toString(nerConfidences.get(nerConfidenceKey));
+            else
+              nerConfidenceEntry = "-";
             if (entityMention.get(CoreAnnotations.EntityTypeAnnotation.class) != null) {
               pw.println(entityMention.get(CoreAnnotations.TextAnnotation.class) + '\t'
-                  + entityMention.get(CoreAnnotations.EntityTypeAnnotation.class));
+                  + entityMention.get(CoreAnnotations.EntityTypeAnnotation.class) + '\t'
+                      + nerConfidenceEntry);
             }
           }
         }
@@ -206,7 +224,16 @@ public class TextOutputter extends AnnotationOutputter {
       for (CoreLabel token : tokens) {
         int tokenCharBegin = token.get(CoreAnnotations.CharacterOffsetBeginAnnotation.class);
         int tokenCharEnd = token.get(CoreAnnotations.CharacterOffsetEndAnnotation.class);
-        pw.println("[Text="+token.word()+" CharacterOffsetBegin="+tokenCharBegin+" CharacterOffsetEnd="+tokenCharEnd+ ']');
+        String extra = "";
+        Integer codepoint = token.get(CoreAnnotations.CodepointOffsetBeginAnnotation.class);
+        if (codepoint != null) {
+          extra = extra + " CodepointOffsetBegin=" + codepoint;
+        }
+        codepoint = token.get(CoreAnnotations.CodepointOffsetEndAnnotation.class);
+        if (codepoint != null) {
+          extra = extra + " CodepointOffsetEnd=" + codepoint;
+        }
+        pw.println("[Text="+token.word()+" CharacterOffsetBegin="+tokenCharBegin+" CharacterOffsetEnd="+tokenCharEnd+extra+']');
       }
     }
 
@@ -224,7 +251,8 @@ public class TextOutputter extends AnnotationOutputter {
             chain.getRepresentativeMention();
         boolean outputHeading = false;
         for (CorefChain.CorefMention mention : chain.getMentionsInTextualOrder()) {
-          if (mention == representative)
+          if (mention == representative &&
+              (!options.printSingletons || chain.getMentionsInTextualOrder().size() > 1))
             continue;
           if (!outputHeading) {
             outputHeading = true;

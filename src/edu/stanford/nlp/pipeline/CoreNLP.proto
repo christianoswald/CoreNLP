@@ -1,3 +1,5 @@
+syntax = "proto2";
+
 package edu.stanford.nlp.pipeline;
 
 option java_package = "edu.stanford.nlp.pipeline";
@@ -7,6 +9,12 @@ option java_outer_classname = "CoreNLPProtos";
 // From JAVANLP_HOME, you can build me with the command:
 //
 //  protoc -I=projects/core/src/edu/stanford/nlp/pipeline/ --java_out=projects/core/src projects/core/src/edu/stanford/nlp/pipeline/CoreNLP.proto
+//
+
+//
+// To do the python version:
+//
+//  protoc -I=./doc --python_out=./stanza/protobuf ./doc/CoreNLP.proto
 //
 
 //
@@ -61,8 +69,8 @@ message Document {
   repeated Mention         mentionsForCoref                    = 14;
   optional bool hasCorefMentionAnnotation = 15;
   optional bool hasCorefAnnotation = 16;
-  repeated uint32 corefMentionToEntityMentionMappings = 17;
-  repeated uint32 entityMentionToCorefMentionMappings = 18;
+  repeated int32 corefMentionToEntityMentionMappings = 17;
+  repeated int32 entityMentionToCorefMentionMappings = 18;
 
   extensions 100 to 255;
 }
@@ -199,6 +207,20 @@ message Token {
   repeated uint32 corefMentionIndex = 64;
   optional uint32 entityMentionIndex = 65;
 
+  // mwt stuff
+  optional bool isMWT = 67;
+  optional bool isFirstMWT = 68;
+  optional string mwtText = 69;
+
+  // number info
+  optional uint64 numericValue = 70;
+  optional string numericType = 71;
+  optional uint64 numericCompositeValue = 72;
+  optional string numericCompositeType = 73;
+
+  optional uint32 codepointOffsetBegin   = 74;
+  optional uint32 codepointOffsetEnd     = 75;
+
   // Fields in the CoreLabel java class that are moved elsewhere
   //       string text           @see Document#text + character offsets
   //       uint32 sentenceIndex  @see Sentence#sentenceIndex
@@ -320,16 +342,16 @@ message Mention {
   optional string person               = 6;
   optional uint32 startIndex           = 7;
   optional uint32 endIndex             = 9;
-  optional uint32 headIndex            = 10;
+  optional int32 headIndex             = 10;
   optional string headString           = 11;
   optional string nerString            = 12;
-  optional uint32 originalRef          = 13;
+  optional int32 originalRef           = 13;
   optional int32 goldCorefClusterID    = 14;
   optional int32 corefClusterID        = 15;
-  optional uint32 mentionNum           = 16;
-  optional uint32 sentNum              = 17;
-  optional uint32 utter                = 18;
-  optional uint32 paragraph            = 19;
+  optional int32 mentionNum            = 16;
+  optional int32 sentNum               = 17;
+  optional int32 utter                 = 18;
+  optional int32 paragraph             = 19;
   optional bool isSubject              = 20;
   optional bool isDirectObject         = 21;
   optional bool isIndirectObject       = 22;
@@ -362,9 +384,9 @@ message Mention {
 //
 
 message IndexedWord {
-  optional uint32 sentenceNum          = 1;
-  optional uint32 tokenIndex           = 2;
-  optional uint32 docID                = 3;
+  optional  int32 sentenceNum          = 1;
+  optional  int32 tokenIndex           = 2;
+  optional  int32 docID                = 3;
   optional uint32 copyCount            = 4;
 }
 

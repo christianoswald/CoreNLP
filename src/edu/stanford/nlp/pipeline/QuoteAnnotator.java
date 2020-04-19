@@ -4,15 +4,19 @@ import edu.stanford.nlp.coref.CorefCoreAnnotations;
 import edu.stanford.nlp.ling.CoreAnnotation;
 import edu.stanford.nlp.ling.CoreAnnotations;
 import edu.stanford.nlp.ling.CoreLabel;
+import edu.stanford.nlp.process.LexerUtils;
 import edu.stanford.nlp.util.CoreMap;
 import edu.stanford.nlp.util.Generics;
 import edu.stanford.nlp.util.Pair;
+import edu.stanford.nlp.util.PropertiesUtils;
 import edu.stanford.nlp.util.Timing;
 import edu.stanford.nlp.util.logging.Redwood;
 
 import java.util.*;
+import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
 
 /**
  * An annotator which picks quotations out of the given text. Allows
@@ -55,7 +59,7 @@ import java.util.regex.Pattern;
  * </ul>
  *
  * The annotator adds a QuotationsAnnotation to the Annotation
- * which returns a List<CoreMap> that
+ * which returns a List&lt;CoreMap&gt; that
  * contain the following information:
  * <ul>
  *  <li>CharacterOffsetBeginAnnotation</li>
@@ -167,9 +171,11 @@ public class QuoteAnnotator implements Annotator  {
       timer = new Timing();
       log.info("Preparing quote annotator...");
     }
-    if (ATTRIBUTE_QUOTES)
-      quoteAttributionAnnotator = new QuoteAttributionAnnotator(props);
-
+    if (ATTRIBUTE_QUOTES)  {
+      Properties relevantProperties = PropertiesUtils.extractPrefixedProperties(props,
+        "quote.attribution.");
+      quoteAttributionAnnotator = new QuoteAttributionAnnotator(relevantProperties);
+    }
     if (VERBOSE) {
       timer.stop("done.");
     }
@@ -311,19 +317,9 @@ public class QuoteAnnotator implements Annotator  {
     return total;
   }
 
-  // Stolen from PTBLexer
-  private static final Pattern asciiSingleQuote = Pattern.compile("&apos;|[\u0091\u2018\u0092\u2019\u201A\u201B\u2039\u203A']");
-  private static final Pattern asciiDoubleQuote = Pattern.compile("&quot;|[\u0093\u201C\u0094\u201D\u201E\u00AB\u00BB\"]");
-
-  private static String asciiQuotes(String in) {
-    String s1 = in;
-    s1 = asciiSingleQuote.matcher(s1).replaceAll("'");
-    s1 = asciiDoubleQuote.matcher(s1).replaceAll("\"");
-    return s1;
-  }
 
   public static String replaceUnicode(String text) {
-    return asciiQuotes(text);
+    return LexerUtils.asciiQuotes(text);
   }
 
   public static Comparator<CoreMap> getQuoteComparator() {

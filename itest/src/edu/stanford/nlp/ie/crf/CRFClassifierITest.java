@@ -243,19 +243,19 @@ public class CRFClassifierITest {
                           "It 's \n",
                   },
                   { "  \"anaesthetic  Smith is\"  ",
-                          "  ``/Oanaesthetic/O  Smith/PERSON is/O''/O  ",
+                          "  \"/Oanaesthetic/O  Smith/PERSON is/O\"/O  ",
                           "  \"anaesthetic  <PERSON>Smith</PERSON> is\"  ",
-                          "<wi num=\"0\" entity=\"O\">``</wi>\n" +
+                          "<wi num=\"0\" entity=\"O\">&quot;</wi>\n" +
                                   "<wi num=\"1\" entity=\"O\">anaesthetic</wi>\n" +
                                   "<wi num=\"2\" entity=\"PERSON\">Smith</wi>\n" +
                                   "<wi num=\"3\" entity=\"O\">is</wi>\n" +
-                                  "<wi num=\"4\" entity=\"O\">&apos;&apos;</wi>\n",
-                          "  <wi num=\"0\" entity=\"O\">``</wi>" +
+                                  "<wi num=\"4\" entity=\"O\">&quot;</wi>\n",
+                          "  <wi num=\"0\" entity=\"O\">&quot;</wi>" +
                                   "<wi num=\"1\" entity=\"O\">anaesthetic</wi>  " +
                                   "<wi num=\"2\" entity=\"PERSON\">Smith</wi> " +
                                   "<wi num=\"3\" entity=\"O\">is</wi>" +
-                                  "<wi num=\"4\" entity=\"O\">&apos;&apos;</wi>  ",
-                          "``/O anaesthetic/O Smith/PERSON is/O ''/O \n",
+                                  "<wi num=\"4\" entity=\"O\">&quot;</wi>  ",
+                          "\"/O anaesthetic/O Smith/PERSON is/O \"/O \n",
                           "\" anaesthetic <PERSON>Smith</PERSON> is \" \n",
 
                   },
@@ -285,23 +285,22 @@ public class CRFClassifierITest {
    *  and gives the entity output as entity type and character offset triples.
    */
   @SuppressWarnings({"unchecked"})
-  private static final Triple[][] testTrip =
+  private static final Triple[][] testTrip = {
+          { new Triple("ORGANIZATION",16,31),
+                  new Triple("ORGANIZATION",99,114),
+                  new Triple("ORGANIZATION",330,362),
+                  new Triple("PERSON",374,393),
+                  new Triple("ORGANIZATION",416,428),
+                  new Triple("ORGANIZATION",434,442),
+                  new Triple("PERSON",453,472),
+          },
+          { new Triple("LOCATION", 0, 6)
+          },
           {
-                  { new Triple("ORGANIZATION",16,31),
-                    new Triple("ORGANIZATION",99,114),
-                    new Triple("ORGANIZATION",330,362),
-                    new Triple("PERSON",374,393),
-                    new Triple("ORGANIZATION",416,428),
-                    new Triple("ORGANIZATION",434,442),
-                    new Triple("PERSON",453,472),
-                  },
-                  { new Triple("LOCATION", 0, 6)
-                  },
-                  {
-                  },
-                  { new Triple("PERSON", 16, 21)
-                  },
-          };
+          },
+          { new Triple("PERSON", 16, 21)
+          },
+  };
 
   private static final int[][] offsets = { { 2, 3}, { 3, 14 } , { 16, 21}, {22, 24}, {24, 25} };
 
@@ -317,7 +316,7 @@ public class CRFClassifierITest {
     crf = CRFClassifier.getDefaultClassifier();
     runCRFTest(crf);
 
-    final boolean isStoredAnswer = Boolean.valueOf(System.getProperty("ner.useStoredAnswer", "false"));
+    final boolean isStoredAnswer = Boolean.parseBoolean(System.getProperty("ner.useStoredAnswer", "false"));
     String txt1 = "Jenny Finkel works for Mixpanel in San Francisco .";
     if (isStoredAnswer) {
       crf = CRFClassifier.getClassifierNoExceptions(nerPath2);
@@ -337,7 +336,7 @@ public class CRFClassifierITest {
       Counter<String> lowResults = new ClassicCounter<>();
       lowResults.setCount("NER F1", 53.0);
       Counter<String> highResults = new ClassicCounter<>();
-      highResults.setCount("NER F1", 53.5);
+      highResults.setCount("NER F1", 54.36);
       BenchmarkingHelper.benchmarkResults(results, lowResults, highResults, null);
     } catch (IOException ioe) {
       Assert.fail("IOError on CRF test file");
@@ -494,7 +493,7 @@ public class CRFClassifierITest {
       } else {
         int[] bestSequence = new ExactBestSequenceFinder().bestSequence(sequenceModel);
         int[] best1 = new ArrayList<>(kBest.keySet()).get(0);
-        Assert.assertTrue(Arrays.equals(bestSequence, best1));
+        Assert.assertArrayEquals(bestSequence, best1);
       }
       kBestSequencesLast = kBestSequences;
     }

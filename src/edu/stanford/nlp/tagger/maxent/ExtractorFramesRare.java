@@ -33,6 +33,7 @@ import edu.stanford.nlp.util.Generics;
 import edu.stanford.nlp.util.StringUtils;
 
 import java.util.*;
+import java.util.regex.Pattern;
 
 
 /**
@@ -41,6 +42,7 @@ import java.util.*;
  *
  * The following options are supported:
  * <table>
+ * <caption>Options for rare extractor frames</caption>
  * <tr><td>Name</td><td>Args</td><td>Effect</td></tr>
  * <tr><td>wordshapes</td><td>left, right</td>
  *     <td>Word shape features, e.g., transform Foo5 into Xxx#
@@ -90,6 +92,13 @@ import java.util.*;
  * @version 2.0
  */
 public class ExtractorFramesRare {
+
+  // When designing POS tagger features for this tagger, remember that it doesn't create
+  // features for all labels for each data pattern matched. Rather it only creates features
+  // for observed labels. This means unobserved labels have zero weight and not a negative
+  // weight. Hence it is important that there are positive features where an observed
+  // combination of data pattern and label are given a positive weight and that the
+  // pattern is sufficiently general to apply over new words seen at runtime.
 
   /**
    * Last 1-4 characters of word
@@ -189,32 +198,9 @@ public class ExtractorFramesRare {
 
   private static final Extractor[] french_unknown_extractors = { cWordFrenchNounSuffix, cWordFrenchAdvSuffix, cWordFrenchVerbSuffix, cWordFrenchAdjSuffix, cWordFrenchPluralSuffix };
 
-  /**
-   * Extracts Spanish gender patterns.
-   */
-  private static final ExtractorSpanishGender cWordSpanishGender =
-    new ExtractorSpanishGender();
-
-  /**
-   * Matches conditional-tense verb suffixes.
-   */
-  private static final ExtractorSpanishConditionalSuffix cWordSpanishConditionalSuffix =
-    new ExtractorSpanishConditionalSuffix();
-
-  /**
-   * Matches imperfect-tense verb suffixes (-er, -ir verbs).
-   */
-  private static final ExtractorSpanishImperfectErIrSuffix cWordSpanishImperfectErIrSuffix =
-    new ExtractorSpanishImperfectErIrSuffix();
-
-  private static final Extractor[] spanish_unknown_extractors = {
-    cWordSpanishGender, cWordSpanishConditionalSuffix,
-    cWordSpanishImperfectErIrSuffix
-  };
 
 
-  private ExtractorFramesRare() {
-  }
+  private ExtractorFramesRare() { } // static methods
 
   /**
    * Adds a few specific extractors needed by both "naacl2003unknowns"
@@ -274,6 +260,10 @@ public class ExtractorFramesRare {
         extrs.addAll(Arrays.asList(naacl2003Conjunctions()));
       } else if ("frenchunknowns".equalsIgnoreCase(arg)) {
         extrs.addAll(Arrays.asList(french_unknown_extractors));
+      } else if ("spanishunknowns".equalsIgnoreCase(arg)) {
+        extrs.add(new ExtractorSpanishGender());
+        extrs.add(new ExtractorSpanishConditionalSuffix());
+        extrs.add(new ExtractorSpanishImperfectErIrSuffix());
       } else if (arg.startsWith("wordshapes(")) {
         int lWindow = Extractor.getParenthesizedNum(arg, 1);
         int rWindow = Extractor.getParenthesizedNum(arg, 2);
@@ -591,6 +581,19 @@ class RareExtractor extends Extractor {
       }
     }
     return false;
+  }
+
+  private static final Pattern numericPattern = Pattern.compile("[0-9,./-]+");
+
+  protected static boolean allNumeric(String s) {
+    return s != null && numericPattern.matcher(s).matches();
+  }
+
+  // todo: delete this ExtractorNonAlphanumeric serves (better)
+  private static final Pattern symbolsPattern = Pattern.compile("[^A-Za-z0-9]+");
+
+  protected static boolean allSymbols(String s) {
+    return s != null && symbolsPattern.matcher(s).matches();
   }
 
   protected static boolean containsLetter(String s) {
@@ -931,7 +934,7 @@ class ExtractorCapDistLC extends RareExtractor {
 class ExtractorCapLCSeen extends RareExtractor {
 
   final String tag;
-  int cutoff = 1;
+  private int cutoff = 1;
   private final Extractor cCapDist = new ExtractorCapDistLC();
 
   private transient Dictionary dict;
@@ -976,7 +979,7 @@ class ExtractorCapLCSeen extends RareExtractor {
 // todo [cdm 2018]: It should be possible to turn these next three extractors into localContext extractors, since only use of tags is to detect start of sentence!
 
 /**
- * "1" if not first word of sentence and _some_ letter is uppercase
+ * "1" if not first word of sentence and _some_ letter is uppercase; else "0"
  */
 class ExtractorMidSentenceCap extends RareExtractor {
 
@@ -986,9 +989,9 @@ class ExtractorMidSentenceCap extends RareExtractor {
   @Override
   String extract(History h, PairsHolder pH) {
     String prevTag = pH.getTag(h, -1);
-    if(prevTag == null) { return "0"; }
-    if (prevTag.equals(naTag)) {
-      return "0";
+    // System.err.printf("ExtractorMidSentenceCap: h.start=%d, h.current=%d, prevTag=%s.%n", h.start, h.current, prevTag);
+    if (prevTag == null || ! prevTag.equals(naTag)) {
+      return zeroSt;
     }
     String s = pH.getWord(h, 0);
     if (containsUpperCase(s)) {
@@ -1010,6 +1013,8 @@ class ExtractorMidSentenceCap extends RareExtractor {
  */
 class ExtractorStartSentenceCap extends RareExtractor {
 
+  // todo [cdm 2018]: Can we just rewrite this as history.current = history.start and make it local context?
+
   private transient Dictionary dict;
 
   public ExtractorStartSentenceCap() {
@@ -1023,8 +1028,8 @@ class ExtractorStartSentenceCap extends RareExtractor {
   @Override
   String extract(History h, PairsHolder pH) {
     String prevTag = pH.getTag(h, -1);
-    if (prevTag == null) { return zeroSt; }
-    if (!prevTag.equals(naTag)) {
+    // System.err.printf("ExtractorStartSentenceCap: h.start=%d, h.current=%d, prevTag=%s.%n", h.start, h.current, prevTag);
+    if (prevTag == null || ! prevTag.equals(naTag)) {
       return zeroSt;
     }
     String s = pH.getWord(h, 0);
@@ -1065,8 +1070,8 @@ class ExtractorMidSentenceCapC extends RareExtractor {
   @Override
   String extract(History h, PairsHolder pH) {
     String prevTag = pH.getTag(h, -1);
-    if (prevTag == null) { return zeroSt; }
-    if (prevTag.equals(naTag)) {
+    // System.err.printf("ExtractorMidSentenceCapC: h.start=%d, h.current=%d, prevTag=%s.%n", h.start, h.current, prevTag);
+    if (prevTag == null || prevTag.equals(naTag)) {
       return zeroSt;
     }
     String s = pH.getWord(h, 0);
@@ -1121,7 +1126,9 @@ class ExtractorCapC extends RareExtractor {
 // TODO: the next time we have to rebuild the tagger files anyway, we
 // should change this class's name to something like
 // "ExtractorNoLowercase" to distinguish it from
-// ExtractorAllCapitalized
+// ExtractorAllCapitalized.
+// Also, it seems like this is just a bad extractor to have, as it wrongly makes you use
+// word tags like CD, NNP for symbols. Prefer ExtractorAllCapitalized!
 class ExtractorAllCap extends RareExtractor {
 
   public ExtractorAllCap() {
@@ -1242,16 +1249,17 @@ class ExtractorWordSuff extends RareExtractor {
 class ExtractorWordPref extends RareExtractor {
 
   // todo [cdm 2013]: position field in this class could be deleted and use super's position. But will break
-  private final int num, position;
+  private final int num;
+  private final int position;
 
   ExtractorWordPref(int num, int position) {
+    super(position);
     this.num = num;
     this.position = position;
   }
 
   @Override
   String extract(History h, PairsHolder pH) {
-    // String word = TestSentence.toNice(pH.getWord(h, 0));
     String word = pH.getWord(h, position);
     if (word.length() < num) {
       return "######";
@@ -1269,6 +1277,7 @@ class ExtractorWordPref extends RareExtractor {
 
   @Override public boolean isLocal() { return (position == 0); }
   @Override public boolean isDynamic() { return false; }
+
 } // end class ExtractorWordPref
 
 
@@ -1277,7 +1286,7 @@ class ExtractorsConjunction extends RareExtractor {
   private final Extractor extractor1;
   private final Extractor extractor2;
 
-  volatile boolean isLocal, isDynamic;
+  private volatile boolean isLocal, isDynamic;
 
   ExtractorsConjunction(Extractor e1, Extractor e2) {
     extractor1 = e1;
@@ -1315,11 +1324,12 @@ class ExtractorsConjunction extends RareExtractor {
     return StringUtils.getShortClassName(this) + '(' + extractor1 + ',' + extractor2 + ')';
   }
 
+} // end class ExtractorsConjunction
 
-}
 
-
-/** This class is loaded by reflection in some POS taggers. */
+/** Returns true ("1") if and only if this word has no alphanumeric characters in it.
+ *  This class is loaded by reflection in some POS taggers.
+ */
 @SuppressWarnings("unused")
 class ExtractorNonAlphanumeric extends RareExtractor {
 
@@ -1332,6 +1342,54 @@ class ExtractorNonAlphanumeric extends RareExtractor {
       return "0";
     }
     return "1";
+  }
+
+  @Override public boolean isLocal() { return true; }
+  @Override public boolean isDynamic() { return false; }
+
+  private static final long serialVersionUID = 1L;
+
+}
+
+
+/** This class is loaded by reflection in some POS taggers. */
+@SuppressWarnings("unused")
+class ExtractorNumeric extends RareExtractor {
+
+  public ExtractorNumeric() { }
+
+  @Override
+  String extract(History h, PairsHolder pH) {
+    String s = pH.getWord(h, 0);
+    if (containsNumber(s) && allNumeric(s)) {
+      return "1";
+    } else {
+      return "0";
+    }
+  }
+
+  @Override public boolean isLocal() { return true; }
+  @Override public boolean isDynamic() { return false; }
+
+  private static final long serialVersionUID = 1L;
+
+}
+
+/** This class is loaded by reflection in some POS taggers. */
+// todo: delete this ExtractorNonAlphanumeric serves (better)
+@SuppressWarnings("unused")
+class ExtractorSymbols extends RareExtractor {
+
+  public ExtractorSymbols() { }
+
+  @Override
+  String extract(History h, PairsHolder pH) {
+    String s = pH.getWord(h, 0);
+    if (allSymbols(s)) {
+      return "1";
+    } else {
+      return "0";
+    }
   }
 
   @Override public boolean isLocal() { return true; }
@@ -1377,6 +1435,8 @@ class PluralAcronymDetector extends RareExtractor {
 
 }
 
+
+/* -- Extractor classes for Chinese -- */
 
 class CtbPreDetector extends RareExtractor {
 
@@ -1604,6 +1664,9 @@ class ExtractorFrenchPluralSuffix extends CWordBooleanExtractor {
 }
 
 
+/**
+ * Extracts Spanish gender patterns.
+ */
 class ExtractorSpanishGender extends RareExtractor {
 
   private static final long serialVersionUID = -7359312929174070404L;
@@ -1621,6 +1684,9 @@ class ExtractorSpanishGender extends RareExtractor {
 }
 
 
+/**
+ * Matches conditional-tense verb suffixes.
+ */
 class ExtractorSpanishConditionalSuffix extends CWordBooleanExtractor {
 
   private static final long serialVersionUID = 4383251116043848632L;
@@ -1631,7 +1697,9 @@ class ExtractorSpanishConditionalSuffix extends CWordBooleanExtractor {
   }
 }
 
-
+/**
+ * Matches imperfect-tense verb suffixes (-er, -ir verbs).
+ */
 class ExtractorSpanishImperfectErIrSuffix extends CWordBooleanExtractor {
 
   private static final long serialVersionUID = -5804047931816433075L;

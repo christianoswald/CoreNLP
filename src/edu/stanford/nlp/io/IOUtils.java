@@ -313,11 +313,12 @@ public class IOUtils  {
 
   public static <T> T readObjectAnnouncingTimingFromURLOrClasspathOrFileSystem(Redwood.RedwoodChannels log, String msg, String path) {
     T obj;
+    Timing timing = new Timing();
     try {
-      Timing timing = new Timing();
       obj = IOUtils.readObjectFromURLOrClasspathOrFileSystem(path);
       log.info(msg + ' ' + path + " ... done [" + timing.toSecondsString() + " sec].");
     } catch (IOException | ClassNotFoundException e) {
+      log.info(msg + ' ' + path + " ... failed! [" + timing.toSecondsString() + " sec].");
       throw new RuntimeIOException(e);
     }
     return obj;
@@ -1593,7 +1594,7 @@ public class IOUtils  {
    * @throws IOException
    */
   public static Set<String> readColumnSet(String infile, int field) throws IOException {
-    BufferedReader br = IOUtils.getBufferedFileReader(infile);
+    BufferedReader br = IOUtils.readerFromString(infile);
 
     Set<String> set = Generics.newHashSet();
     for (String line; (line = br.readLine()) != null; ) {
@@ -1619,7 +1620,7 @@ public class IOUtils  {
   {
     Pattern delimiterPattern = Pattern.compile(delimiter);
     List<C> list = new ArrayList<>();
-    BufferedReader br = IOUtils.getBufferedFileReader(filename);
+    BufferedReader br = IOUtils.readerFromString(filename);
     for (String line; (line = br.readLine()) != null; ) {
       line = line.trim();
       if (line.length() > 0) {
@@ -1634,7 +1635,7 @@ public class IOUtils  {
   public static Map<String,String> readMap(String filename) throws IOException {
     Map<String,String> map = Generics.newHashMap();
     try {
-      BufferedReader br = IOUtils.getBufferedFileReader(filename);
+      BufferedReader br = IOUtils.readerFromString(filename);
 
       for (String line; (line = br.readLine()) != null; ) {
         String[] fields = tab.split(line,2);

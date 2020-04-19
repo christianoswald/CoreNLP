@@ -46,15 +46,15 @@ import java.util.regex.Pattern;
  * <ol>
  * <li> A TokensRegex expression (marked by starting with "( " and ending with " )".
  *      See {@link TokenSequencePattern} for TokensRegex syntax.
- *    <br/><em>Example</em>: {@code ( /University/ /of/ [ {ner:LOCATION} ] )    SCHOOL}
+ *    <br><em>Example</em>: {@code ( /University/ /of/ [ {ner:LOCATION} ] )    SCHOOL}
  * </li>
  * <li> a sequence of regex, each separated by whitespace (matching "\s+").
- *    <br/><em>Example</em>: {@code Stanford    SCHOOL}
- *    <br/>
+ *    <br><em>Example</em>: {@code Stanford    SCHOOL}
+ *    <br>
  *    The regex will match if the successive regex match a sequence of tokens in the input.
  *    Spaces can only be used to separate regular expression tokens; within tokens \s or similar non-space
  *    representations need to be used instead.
- *    <br/>
+ *    <br>
  *    Notes: Following Java regex conventions, some characters in the file need to be escaped. Only a single
  *    backslash should be used though, as these are not String literals. The input to RegexNER will have
  *    already been tokenized.  So, for example, with our usual English tokenization, things like genitives
@@ -73,10 +73,10 @@ import java.util.regex.Pattern;
  *   <li>Supports both TokensRegex patterns and patterns over the text of the tokens</li>
  *   <li>When NER annotation can be overwritten based on the original NER labels.  The rules for when the new NER labels are used
  *       are given below:
- *       <br/>If the found expression overlaps with a previous NER phrase, then the NER labels are not replaced.
- *       <br/>  <em>Example</em>: Old NER phrase: {@code The ABC Company}, Found Phrase: {@code ABC => } Old NER labels are not replaced.
- *       <br/>If the found expression has inconsistent NER tags among the tokens, then the NER labels are replaced.
- *       <br/>  <em>Example</em>: Old NER phrase: {@code The/O ABC/MISC Company/ORG => The/ORG ABC/ORG Company/ORG}
+ *       <br>If the found expression overlaps with a previous NER phrase, then the NER labels are not replaced.
+ *       <br>  <em>Example</em>: Old NER phrase: {@code The ABC Company}, Found Phrase: {@code ABC => } Old NER labels are not replaced.
+ *       <br>If the found expression has inconsistent NER tags among the tokens, then the NER labels are replaced.
+ *       <br>  <em>Example</em>: Old NER phrase: {@code The/O ABC/MISC Company/ORG => The/ORG ABC/ORG Company/ORG}
  *   </li>
  *   <li>How {@code validpospattern} is handled for POS tags is specified by {@code PosMatchType}</li>
  *   <li>By default, there is no {@code validPosPattern}</li>
@@ -86,6 +86,7 @@ import java.util.regex.Pattern;
  * <p>
  *   Configuration:
  * <table>
+ * <caption>Annotator configuration</caption>
  *   <tr><th>Field</th><th>Description</th><th>Default</th></tr>
  *   <tr><td>{@code mapping}</td><td>Comma separated list of mapping files to use </td>
  *      <td>{@code edu/stanford/nlp/models/kbp/regexner_caseless.tab}</td>
@@ -101,9 +102,9 @@ import java.util.regex.Pattern;
  *      <td>{@code O,MISC}</td></tr>
  *   <tr><td>{@code posmatchtype}</td>
  *     <td>How should {@code validpospattern} be used to match the POS of the tokens.
- *         {@code MATCH_ALL_TOKENS} - All tokens has to match.<br/>
- *         {@code MATCH_AT_LEAST_ONE_TOKEN} - At least one token has to match.<br/>
- *         {@code MATCH_ONE_TOKEN_PHRASE_ONLY} - Only has to match for one token phrases.<br/>
+ *         {@code MATCH_ALL_TOKENS} - All tokens has to match.<br>
+ *         {@code MATCH_AT_LEAST_ONE_TOKEN} - At least one token has to match.<br>
+ *         {@code MATCH_ONE_TOKEN_PHRASE_ONLY} - Only has to match for one token phrases.<br>
  *      </td>
  *      <td>{@code MATCH_AT_LEAST_ONE_TOKEN}</td>
  *   </tr>
@@ -115,7 +116,7 @@ import java.util.regex.Pattern;
  *          For these types, only if the matched expression has NER type matching the
  *          specified overwriteableType for the regex will the NER type be overwritten.</td>
  *      <td>{@code}</td></tr>
- *   <tr><td>{@code ignoreCase}</td><td>If true, case is ignored</td></td>
+ *   <tr><td>{@code ignoreCase}</td><td>If true, case is ignored</td>
  *      <td>{@code false}</td></tr>
  *   <tr><td>{@code verbose}</td><td>If true, turns on extra debugging messages.</td>
  *      <td>{@code false}</td></tr>
@@ -372,13 +373,16 @@ public class TokensRegexNERAnnotator implements Annotator  {
         // TODO: posTagPatterns...
         pattern = TokenSequencePattern.compile(env, entry.tokensRegex);
       } else {
-        List<SequencePattern.PatternExpr> nodePatterns = new ArrayList<>();
+        List<SequencePattern.PatternExpr> nodePatterns = new ArrayList<>(entry.regex.length);
         for (String p:entry.regex) {
           CoreMapNodePattern c = CoreMapNodePattern.valueOf(p, patternFlags);
           if (posTagPattern != null) {
             c.add(CoreAnnotations.PartOfSpeechAnnotation.class, posTagPattern);
           }
           nodePatterns.add(new SequencePattern.NodePatternExpr(c));
+        }
+        if (nodePatterns.size() == 1) {
+          nodePatterns = Collections.singletonList(nodePatterns.get(0));
         }
         pattern = TokenSequencePattern.compile(new SequencePattern.SequencePatternExpr(nodePatterns));
       }
@@ -745,7 +749,7 @@ public class TokensRegexNERAnnotator implements Annotator  {
         types[i] = split[annotationCols[i]].trim();
       }
 
-      Set<String> overwritableTypes = Generics.newHashSet();
+      final Set<String> overwritableTypes;
       double priority = 0.0;
 
       if (iOverwrite >= 0 && split.length > iOverwrite) {
@@ -753,7 +757,16 @@ public class TokensRegexNERAnnotator implements Annotator  {
           logger.warn("Number in types column for " + Arrays.toString(key) +
                   " is probably priority: " + split[iOverwrite]);
         }
-        overwritableTypes.addAll(Arrays.asList(COMMA_DELIMITERS_PATTERN.split(split[iOverwrite].trim())));
+        String[] tempOTs = COMMA_DELIMITERS_PATTERN.split(split[iOverwrite].trim());
+        if (tempOTs.length == 0) {
+          overwritableTypes = Collections.emptySet();
+        } else if (tempOTs.length == 1) {
+          overwritableTypes = Collections.singleton(tempOTs[0]);
+        } else {
+          overwritableTypes = new HashSet<>(Arrays.asList(tempOTs));
+        }
+      } else {
+        overwritableTypes = Collections.emptySet();
       }
       if (iPriority >= 0 && split.length > iPriority) {
         try {

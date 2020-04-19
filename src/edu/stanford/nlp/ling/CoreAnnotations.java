@@ -959,6 +959,37 @@ public class CoreAnnotations {
   }
 
   /**
+   * Some codepoints count as more than one character.  For example,
+   * mathematical symbols.  This can cause serious problems in other
+   * languages such as Python which see those characters as one
+   * character wide.
+   * <br>
+   * This annotation is how many codepoints to the beginning of the text.
+   */
+  public static class CodepointOffsetBeginAnnotation implements CoreAnnotation<Integer> {
+    @Override
+    public Class<Integer> getType() {
+      return Integer.class;
+    }
+  }
+
+  /**
+   * Some codepoints count as more than one character.  For example,
+   * mathematical symbols.  This can cause serious problems in other
+   * languages such as Python which see those characters as one
+   * character wide.
+   * <br>
+   * This annotation is how many codepoints to the end of the text.
+   */
+  public static class CodepointOffsetEndAnnotation implements CoreAnnotation<Integer> {
+    @Override
+    public Class<Integer> getType() {
+      return Integer.class;
+    }
+  }
+
+
+  /**
    * Key for relative value of a word - used in RTE
    */
   public static class CostMagnificationAnnotation implements CoreAnnotation<Double> {
@@ -1186,8 +1217,8 @@ public class CoreAnnotations {
     }
   }
 
-  /** index into the list of entity mentions in a document for canonical entity mention
-   *  ...this is primarily for linking entity mentions to their canonical entity mention
+  /** Index into the list of entity mentions in a document for canonical entity mention.
+   *  This is primarily for linking entity mentions to their canonical entity mention.
    */
   public static class CanonicalEntityMentionIndexAnnotation implements CoreAnnotation<Integer> {
     @Override
@@ -2143,6 +2174,37 @@ public class CoreAnnotations {
     public Class<Boolean> getType() {return Boolean.class;}
   }
 
+  /**
+   * The CoreLabel key identifying whether a token is a multi-word-token
+   *
+   * This is attached to {@link CoreLabel}s.
+   */
+  public static class IsMultiWordTokenAnnotation implements CoreAnnotation<Boolean> {
+    @Override
+    public Class<Boolean> getType() {return Boolean.class;}
+  }
+
+  /**
+   * Text of the token that was used to create this word during a multi word token split.
+   */
+  public static class MWTTokenTextAnnotation implements CoreAnnotation<String> {
+    @Override
+    public Class<String> getType() {
+      return String.class;
+    }
+  }
+
+  /**
+   * The CoreLabel key identifying whether a token is the first word derived
+   * from a multi-word-token.  So if "des" is split into "de" and "les", "de"
+   * would be marked as true.
+   */
+  public static class IsFirstWordOfMWTAnnotation implements CoreAnnotation<Boolean> {
+    @Override
+    public Class<Boolean> getType() {
+      return Boolean.class;
+    }
+  }
 
 
 }

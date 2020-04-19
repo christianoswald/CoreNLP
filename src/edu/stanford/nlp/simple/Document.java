@@ -12,6 +12,7 @@ import edu.stanford.nlp.naturalli.NaturalLogicAnnotations;
 import edu.stanford.nlp.naturalli.OperatorSpec;
 import edu.stanford.nlp.naturalli.Polarity;
 import edu.stanford.nlp.pipeline.*;
+import edu.stanford.nlp.semgraph.SemanticGraph;
 import edu.stanford.nlp.semgraph.SemanticGraphCoreAnnotations;
 import edu.stanford.nlp.sentiment.SentimentCoreAnnotations;
 import edu.stanford.nlp.trees.Tree;
@@ -250,7 +251,7 @@ public class Document {
    *
    * @return An annotator as specified by the given name and properties.
    */
-  private synchronized static Supplier<Annotator> getOrCreate(String name, Properties props, Supplier<Annotator> annotator) {
+  private static synchronized Supplier<Annotator> getOrCreate(String name, Properties props, Supplier<Annotator> annotator) {
     StanfordCoreNLP.AnnotatorSignature key = new StanfordCoreNLP.AnnotatorSignature(name, PropertiesUtils.getSignature(name, props));
     customAnnotators.register(name, props, StanfordCoreNLP.GLOBAL_ANNOTATOR_CACHE.computeIfAbsent(key, (sig) -> Lazy.cache(annotator)));
     return () -> customAnnotators.get(name);
@@ -791,7 +792,7 @@ public class Document {
 
   synchronized Document runPOS(Properties props) {
     // Cached result
-    if (this.sentences != null && this.sentences.size() > 0 && this.sentences.get(0).rawToken(0).hasPos()) {
+    if (this.sentences != null && ! this.sentences.isEmpty() && this.sentences.get(0).rawToken(0).hasPos()) {
       return this;
     }
     // Prerequisites
@@ -809,7 +810,7 @@ public class Document {
 
   synchronized Document runLemma(Properties props) {
     // Cached result
-    if (this.sentences != null && this.sentences.size() > 0 && this.sentences.get(0).rawToken(0).hasLemma()) {
+    if (this.sentences != null && ! this.sentences.isEmpty() && this.sentences.get(0).rawToken(0).hasLemma()) {
       return this;
     }
     // Prerequisites
@@ -827,7 +828,7 @@ public class Document {
 
   synchronized Document mockLemma(Properties props) {
     // Cached result
-    if (this.sentences != null && this.sentences.size() > 0 && this.sentences.get(0).rawToken(0).hasLemma()) {
+    if (this.sentences != null && ! this.sentences.isEmpty() && this.sentences.get(0).rawToken(0).hasLemma()) {
       return this;
     }
     // Prerequisites
@@ -842,7 +843,7 @@ public class Document {
   }
 
   synchronized Document runNER(Properties props) {
-    if (this.sentences != null && this.sentences.size() > 0 && this.sentences.get(0).rawToken(0).hasNer()) {
+    if (this.sentences != null && ! this.sentences.isEmpty() && this.sentences.get(0).rawToken(0).hasNer()) {
       return this;
     }
     // Run prerequisites
@@ -873,7 +874,7 @@ public class Document {
   }
 
   synchronized Document runParse(Properties props) {
-    if (this.sentences != null && this.sentences.size() > 0 && this.sentences.get(0).rawSentence().hasParseTree()) {
+    if (this.sentences != null && ! this.sentences.isEmpty() && this.sentences.get(0).rawSentence().hasParseTree()) {
       return this;
     }
     // Run annotator
@@ -895,18 +896,27 @@ public class Document {
         Tree tree = sentence.get(TreeCoreAnnotations.TreeAnnotation.class);
         Tree binaryTree = sentence.get(TreeCoreAnnotations.BinarizedTreeAnnotation.class);
         sentences.get(i).updateParse(serializer.toProto(tree),
-                                     binaryTree == null ? null : serializer.toProto(binaryTree));
-        sentences.get(i).updateDependencies(
-            ProtobufAnnotationSerializer.toProto(sentence.get(SemanticGraphCoreAnnotations.BasicDependenciesAnnotation.class)),
-            ProtobufAnnotationSerializer.toProto(sentence.get(SemanticGraphCoreAnnotations.EnhancedDependenciesAnnotation.class)),
-            ProtobufAnnotationSerializer.toProto(sentence.get(SemanticGraphCoreAnnotations.EnhancedPlusPlusDependenciesAnnotation.class)));
+                binaryTree == null ? null : serializer.toProto(binaryTree));
+        // check this sentence has dependency annotations and update
+        SemanticGraph basicDependencies =
+                sentence.get(SemanticGraphCoreAnnotations.BasicDependenciesAnnotation.class);
+        SemanticGraph enhancedDependencies =
+                sentence.get(SemanticGraphCoreAnnotations.EnhancedDependenciesAnnotation.class);
+        SemanticGraph enhancedPlusPlusDependencies =
+                sentence.get(SemanticGraphCoreAnnotations.EnhancedPlusPlusDependenciesAnnotation.class);
+        if (basicDependencies != null && enhancedDependencies != null && enhancedPlusPlusDependencies != null) {
+          sentences.get(i).updateDependencies(
+                  ProtobufAnnotationSerializer.toProto(basicDependencies),
+                  ProtobufAnnotationSerializer.toProto(enhancedDependencies),
+                  ProtobufAnnotationSerializer.toProto(enhancedPlusPlusDependencies));
+        }
       }
     }
     return this;
   }
 
   synchronized Document runDepparse(Properties props) {
-    if (this.sentences != null && this.sentences.size() > 0 &&
+    if (this.sentences != null && ! this.sentences.isEmpty() &&
         this.sentences.get(0).rawSentence().hasBasicDependencies()) {
       return this;
     }
@@ -930,7 +940,7 @@ public class Document {
   }
 
   synchronized Document runNatlog(Properties props) {
-    if (this.sentences != null && this.sentences.size() > 0 && this.sentences.get(0).rawToken(0).hasPolarity()) {
+    if (this.sentences != null && ! this.sentences.isEmpty() && this.sentences.get(0).rawToken(0).hasPolarity()) {
       return this;
     }
     // Run prerequisites
@@ -1002,12 +1012,12 @@ public class Document {
 
 
   synchronized Document runSentiment(Properties props) {
-    if (this.sentences != null && this.sentences.size() > 0 && this.sentences.get(0).rawSentence().hasSentiment()) {
+    if (this.sentences != null && ! this.sentences.isEmpty() && this.sentences.get(0).rawSentence().hasSentiment()) {
         return this;
     }
     // Run prerequisites
     runParse(props);
-    if (this.sentences != null && this.sentences.size() > 0 && !this.sentences.get(0).rawSentence().hasBinarizedParseTree()) {
+    if (this.sentences != null && ! this.sentences.isEmpty() && ! this.sentences.get(0).rawSentence().hasBinarizedParseTree()) {
       throw new IllegalStateException("No binarized parse tree (perhaps it's not supported in this language?)");
     }
     // Run annotator

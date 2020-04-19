@@ -13,6 +13,7 @@ import edu.stanford.nlp.trees.MemoryTreebank;
 import edu.stanford.nlp.trees.Tree;
 import edu.stanford.nlp.trees.TreeNormalizer;
 import edu.stanford.nlp.util.Generics;
+import edu.stanford.nlp.util.Pair;
 import edu.stanford.nlp.util.StringUtils;
 import edu.stanford.nlp.util.logging.Redwood;
 
@@ -40,7 +41,13 @@ import edu.stanford.nlp.util.logging.Redwood;
  * The root of the graph can be marked by the $ sign, that is {@code {$}}
  * represents the root node.
  * <p>
- * A node description can be negated with '!'. !{lemma:boy} matches any token that isn't "boy"
+ * A node description can be negated with '!'. {@code !{lemma:boy}} matches any token that isn't "boy".
+ * <br>
+ * Another way to negate a node description is with a negative
+ * lookahead regex, although this starts to look a little ugly.
+ * For example, {@code {lemma:/^{?!boy}.*$/} } will also match any
+ * token with a lemma that isn't "boy".  Note, however, that if you
+ * use this style, there needs to be some lemma attached to the token.
  *
  * <h3>Relations</h3>
  *
@@ -99,7 +106,7 @@ import edu.stanford.nlp.util.logging.Redwood;
  * expression
  *
  * <blockquote>
- *{@code {} [&lt;subj {} | &lt;agent {}] &amp; @ {} }
+ *{@code {} [<subj {} | <agent {}] & @ {} }
  * </blockquote>
  *
  * matches a node that is either the dep of a subj or agent relationship and
@@ -117,13 +124,13 @@ import edu.stanford.nlp.util.logging.Redwood;
  * descendants:
  *
  * <blockquote>
- * {@code {}=a &gt;&gt; {word:foo} : {}=a &gt;&gt; {word:bar} }
+ * {@code {}=a >> {word:foo} : {}=a >> {word:bar} }
  * </blockquote>
  *
  * This pattern could have been written
  *
  * <blockquote>
- * {@code {}=a &gt;&gt; {word:foo} &gt;&gt; {word:bar} }
+ * {@code {}=a >> {word:foo} >> {word:bar} }
  * </blockquote>
  *
  * However, for more complex examples, partitioning a pattern may make
@@ -146,8 +153,12 @@ import edu.stanford.nlp.util.logging.Redwood;
  * Named nodes that refer back to previously named nodes need not have a node
  * description -- this is known as "backreferencing".  In this case, the
  * expression will match only when all instances of the same name get matched to
- * the same node.  For example: the pattern
- * {@code {} &gt;dobj ({} &gt; {}=foo) &gt;mod ({} &gt; {}=foo) }
+ * the same node.</p>
+ * <p>
+ * For example:
+ * <blockquote>
+ * {@code {} >dobj ({} > {}=foo) >mod ({} > {}=foo) }
+ * </blockquote>
  * will match a graph in which there are two nodes, {@code X} and
  * {@code Y}, for which {@code X} is the grandparent of
  * {@code Y} and there are two paths to {@code Y}, one of
@@ -244,6 +255,20 @@ public abstract class SemgrexPattern implements Serializable  {
   }
 
   /**
+   * Get a {@link SemgrexMatcher} for this pattern in this graph.
+   *
+   * @param sg
+   *          the SemanticGraph to match on
+   * @param root
+   *         the IndexedWord from which to start the search
+   * @return a SemgrexMatcher
+   */
+  public SemgrexMatcher matcher(SemanticGraph sg, IndexedWord root) {
+    return matcher(sg, root, Generics.<String, IndexedWord>newHashMap(), Generics.<String, String>newHashMap(),
+        new VariableStrings(), false);
+  }
+
+  /**
    * Get a {@link SemgrexMatcher} for this pattern in this graph, with some
    * initial conditions on the variable assignments
    */
@@ -321,6 +346,8 @@ public abstract class SemgrexPattern implements Serializable  {
   // -----------------------------------------------------------
 
   /**
+   * The goal is to return a string which will be compiled to the same pattern
+   *
    * @return A single-line string representation of the pattern
    */
   @Override
@@ -473,10 +500,10 @@ public abstract class SemgrexPattern implements Serializable  {
       CoNLLUDocumentReader reader = new CoNLLUDocumentReader();
       for (String conlluFile : argsMap.get(CONLLU_FILE)) {
         log.info("Loading file " + conlluFile);
-        Iterator<SemanticGraph> it = reader.getIterator(IOUtils.readerFromString(conlluFile));
+        Iterator<Pair<SemanticGraph,SemanticGraph>> it = reader.getIterator(IOUtils.readerFromString(conlluFile));
 
         while (it.hasNext()) {
-          SemanticGraph graph = it.next();
+          SemanticGraph graph = it.next().first;
           graphs.add(graph);
         }
       }

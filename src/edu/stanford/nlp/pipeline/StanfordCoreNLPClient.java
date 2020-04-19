@@ -3,6 +3,7 @@ package edu.stanford.nlp.pipeline;
 import edu.stanford.nlp.io.FileSequentialCollection;
 import edu.stanford.nlp.io.IOUtils;
 import edu.stanford.nlp.io.RuntimeIOException;
+import edu.stanford.nlp.ling.CoreAnnotations;
 import edu.stanford.nlp.util.StringUtils;
 import edu.stanford.nlp.util.logging.Redwood;
 import edu.stanford.nlp.util.logging.StanfordRedwoodConfiguration;
@@ -77,7 +78,7 @@ public class StanfordCoreNLPClient extends AnnotationPipeline  {
     public String toString() {
       return protocol + "://" + host + ':' + port;
     }
-  }
+  } // end static class Backend
 
   /**
    * A special type of {@link Thread}, which is responsible for scheduling jobs
@@ -240,6 +241,8 @@ public class StanfordCoreNLPClient extends AnnotationPipeline  {
    */
   private final ProtobufAnnotationSerializer serializer = new ProtobufAnnotationSerializer(true);
 
+  private boolean fallbackToLocalPipeline;
+
   /**
    * The main constructor. Create a client from a properties file and a list of backends.
    * Note that this creates at least one Daemon thread.
@@ -366,14 +369,17 @@ public class StanfordCoreNLPClient extends AnnotationPipeline  {
    */
   public StanfordCoreNLPClient(Properties properties, String host, int port, int threads,
                                String apiKey, String apiSecret) {
-    this(properties, new ArrayList<Backend>() {{
-      for (int i = 0; i < threads; ++i) {
-        add(new Backend(host.startsWith("http://") ? "http" : "https",
-            host.startsWith("http://") ? host.substring("http://".length()) : (host.startsWith("https://") ? host.substring("https://".length()) : host),
-            port));
-      }
-    }},
-    apiKey, apiSecret);
+    this(properties, getBackends(host, port, threads), apiKey, apiSecret);
+  }
+
+  private static List<Backend> getBackends(String host, int port, int threads) {
+    List<Backend> backends = new ArrayList<>();
+    for (int i = 0; i < threads; i++) {
+      backends.add(new Backend(host.startsWith("http://") ? "http" : "https",
+              host.startsWith("http://") ? host.substring("http://".length()) : (host.startsWith("https://") ? host.substring("https://".length()) : host),
+              port));
+    }
+    return backends;
   }
 
   /**
@@ -454,9 +460,14 @@ public class StanfordCoreNLPClient extends AnnotationPipeline  {
         //    2. It must not throw an exception
         doAnnotation(annotation, backend, serverURL, message, 0);
       } catch (Throwable t) {
-        log.err("Could not annotate via server! Trying to annotate locally...", t);
-        StanfordCoreNLP corenlp = new StanfordCoreNLP(properties);
-        corenlp.annotate(annotation);
+        log.err("Could not annotate via server!", t);
+        if (fallbackToLocalPipeline) {
+          log.info("Trying to annotate locally...");
+          StanfordCoreNLP corenlp = new StanfordCoreNLP(properties);
+          corenlp.annotate(annotation);
+        } else {
+          annotation.set(CoreAnnotations.ExceptionAnnotation.class, t);
+        }
       } finally {
         callback.accept(annotation);
         isFinishedCallback.accept(backend);
@@ -527,6 +538,12 @@ public class StanfordCoreNLPClient extends AnnotationPipeline  {
     }
   }
 
+  /** Return true if the referenced server is alive and returns a non-error response code.
+   *
+   * @param serverURL The server (running CoreNLP) to check
+   * @return true if the server is alive and returns a response code between 200 and 400 inclusive
+   */
+  @SuppressWarnings("unused")
   public boolean checkStatus(URL serverURL) {
     try {
       // 1. Set up the connection
@@ -680,6 +697,14 @@ public class StanfordCoreNLPClient extends AnnotationPipeline  {
    * The current code in this main method assumes that each line of the file
    * is to be processed separately as a single sentence.
    * A site must be specified with a protocol like "https:" in front of it.
+   * <p>
+   * Options:
+   * <ul>
+   *   <li>-h or -help: print a help message</li>
+   *   <li>-backends: Specify the URL of backends to use (default is: http://localhost:9000)</li>
+   *   <li>-host and -port: Legacy alternative to -backends</li>
+   *   <li>-fallbackToLocalPipeline: If processing via the server fails, try to process a text with a local pipeline</li>
+   * </ul>
    *
    * Example usage:<br>
    * java -mx6g edu.stanford.nlp.pipeline.StanfordCoreNLP -props properties -backends site1:port1,site2:port2 <br>
@@ -743,6 +768,7 @@ public class StanfordCoreNLPClient extends AnnotationPipeline  {
 
     // Run the pipeline
     StanfordCoreNLPClient client = new StanfordCoreNLPClient(props, backends);
+    client.fallbackToLocalPipeline = props.containsKey("fallbackToLocalPipeline");
     client.run();
     try {
       client.shutdown();  // In case anything is pending on the server

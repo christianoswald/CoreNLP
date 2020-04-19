@@ -45,7 +45,9 @@ public class EntityMentionsAnnotator implements Annotator {
    */
   private final boolean doAcronyms;
 
-  private LanguageInfo.HumanLanguage entityMentionsLanguage;
+  private static final boolean matchTokenText = false;
+
+  private final LanguageInfo.HumanLanguage entityMentionsLanguage;
 
   // TODO: Provide properties
   public static PropertiesUtils.Property[] SUPPORTED_PROPERTIES = new PropertiesUtils.Property[]{};
@@ -65,6 +67,7 @@ public class EntityMentionsAnnotator implements Annotator {
     // defaults
     chunkIdentifier = new LabeledChunkIdentifier();
     doAcronyms = false;
+    entityMentionsLanguage = LanguageInfo.getLanguageFromString("en");
   }
 
   // note: used in annotate.properties
@@ -228,10 +231,10 @@ public class EntityMentionsAnnotator implements Annotator {
     for (String labelWithProb : labelsWithProbs) {
       entityLabelProbVals.put(labelWithProb, 1.1);
     }
+
     // go through each token, see if you can find a smaller prob value for that label
     for (CoreLabel token : entityMention.get(CoreAnnotations.TokensAnnotation.class)) {
-      Map<String,Double> labelProbsForToken =
-          token.get(CoreAnnotations.NamedEntityTagProbsAnnotation.class);
+      Map<String,Double> labelProbsForToken = token.get(CoreAnnotations.NamedEntityTagProbsAnnotation.class);
       for (String label : labelProbsForToken.keySet()) {
         if (entityLabelProbVals.containsKey(label) && labelProbsForToken.get(label) < entityLabelProbVals.get(label))
           entityLabelProbVals.put(label, labelProbsForToken.get(label));
@@ -295,8 +298,22 @@ public class EntityMentionsAnnotator implements Annotator {
                     "O".equals(mention.get(CoreAnnotations.WikipediaEntityAnnotation.class))) &&
                   ( token.get(CoreAnnotations.WikipediaEntityAnnotation.class) != null &&
                     !"O".equals(token.get(CoreAnnotations.WikipediaEntityAnnotation.class))) ) {
-                mention.set(CoreAnnotations.WikipediaEntityAnnotation.class, token.get(CoreAnnotations.WikipediaEntityAnnotation.class));
+                mention.set(CoreAnnotations.WikipediaEntityAnnotation.class,
+                        token.get(CoreAnnotations.WikipediaEntityAnnotation.class));
               }
+            }
+          }
+
+          if (!matchTokenText) {
+            if (annotation.get(CoreAnnotations.TextAnnotation.class) != null
+                            && mention.get(CoreAnnotations.CharacterOffsetBeginAnnotation.class) != null
+                            && mention.get(CoreAnnotations.CharacterOffsetEndAnnotation.class) != null) {
+              String entityMentionText =
+                      annotation.get(CoreAnnotations.TextAnnotation.class).substring(
+                              mention.get(CoreAnnotations.CharacterOffsetBeginAnnotation.class),
+                              mention.get(CoreAnnotations.CharacterOffsetEndAnnotation.class)
+                      );
+              mention.set(CoreAnnotations.TextAnnotation.class, entityMentionText);
             }
           }
         }
@@ -309,14 +326,14 @@ public class EntityMentionsAnnotator implements Annotator {
     if (doAcronyms) { addAcronyms(annotation); }
 
     // Post-process add in KBP pronominal mentions, (English only for now)
-    if (entityMentionsLanguage.equals(LanguageInfo.HumanLanguage.ENGLISH))
+    if (LanguageInfo.HumanLanguage.ENGLISH.equals(entityMentionsLanguage))
       annotatePronominalMentions(annotation);
 
     // build document wide entity mentions list
     List<CoreMap> allEntityMentions = new ArrayList<>();
     int entityMentionIndex = 0;
     for (CoreMap sentence : annotation.get(CoreAnnotations.SentencesAnnotation.class)) {
-      for (CoreMap entityMention : sentence.get(CoreAnnotations.MentionsAnnotation.class)) {
+      for (CoreMap entityMention : sentence.get(mentionsCoreAnnotationClass)) {
         entityMention.set(CoreAnnotations.EntityMentionIndexAnnotation.class, entityMentionIndex);
         entityMention.set(CoreAnnotations.CanonicalEntityMentionIndexAnnotation.class, entityMentionIndex);
         for (CoreLabel entityMentionToken : entityMention.get(CoreAnnotations.TokensAnnotation.class)) {
@@ -329,8 +346,7 @@ public class EntityMentionsAnnotator implements Annotator {
 
     // set the entity mention confidence
     for (CoreMap entityMention : allEntityMentions) {
-      HashMap<String,Double> entityMentionLabelProbVals =
-          determineEntityMentionConfidences(entityMention);
+      HashMap<String,Double> entityMentionLabelProbVals = determineEntityMentionConfidences(entityMention);
       entityMention.set(CoreAnnotations.NamedEntityTagProbsAnnotation.class, entityMentionLabelProbVals);
     }
 
@@ -354,7 +370,7 @@ public class EntityMentionsAnnotator implements Annotator {
 
     // Iterate over tokens...
     for (CoreMap sentence : ann.get(CoreAnnotations.SentencesAnnotation.class)) {
-      List<CoreMap> sentenceMentions = new ArrayList<CoreMap>();
+      List<CoreMap> sentenceMentions = new ArrayList<>();
       List<CoreLabel> tokens = sentence.get(CoreAnnotations.TokensAnnotation.class);
       Integer totalTokensOffset = sentence.get(CoreAnnotations.TokenBeginAnnotation.class);
       for (int i = 0; i < tokens.size(); ++i) {

@@ -1521,16 +1521,16 @@ public class EnglishGrammaticalStructure extends GrammaticalStructure  {
 
   /**
    * Collapse multiword preposition of the following format:
-   * prep|advmod|dep|amod(gov, mwp[0]) <br/>
-   * dep(mpw[0],mwp[1]) <br/>
-   * pobj|pcomp(mwp[1], compl) or pobj|pcomp(mwp[0], compl) <br/>
-   * -&gt; prep_mwp[0]_mwp[1](gov, compl) <br/>
+   * prep|advmod|dep|amod(gov, mwp[0]) <br>
+   * dep(mpw[0],mwp[1]) <br>
+   * pobj|pcomp(mwp[1], compl) or pobj|pcomp(mwp[0], compl) <br>
+   * -&gt; prep_mwp[0]_mwp[1](gov, compl) <br>
    *
-   * prep|advmod|dep|amod(gov, mwp[1]) <br/>
-   * dep(mpw[1],mwp[0]) <br/>
-   * pobj|pcomp(mwp[1], compl) or pobj|pcomp(mwp[0], compl) <br/>
+   * prep|advmod|dep|amod(gov, mwp[1]) <br>
+   * dep(mpw[1],mwp[0]) <br>
+   * pobj|pcomp(mwp[1], compl) or pobj|pcomp(mwp[0], compl) <br>
    * -&gt; prep_mwp[0]_mwp[1](gov, compl)
-   * <p/>
+   * <br>
    *
    * The collapsing has to be done at once in order to know exactly which node
    * is the gov and the dep of the multiword preposition. Otherwise this can
@@ -1564,7 +1564,7 @@ public class EnglishGrammaticalStructure extends GrammaticalStructure  {
    * Collapse multiword preposition of the following format:
    * prep|advmod|dep|amod(gov, mwp0) dep(mpw0,mwp1) pobj|pcomp(mwp1, compl) or
    * pobj|pcomp(mwp0, compl) -&gt; prep_mwp0_mwp1(gov, compl)
-   * <p/>
+   * <br>
    *
    * @param list List of typedDependencies to work on,
    * @param newTypedDeps List of typedDependencies that we construct
@@ -1681,7 +1681,7 @@ public class EnglishGrammaticalStructure extends GrammaticalStructure  {
    * Collapse multi-words preposition of the following format: advmod|prt(gov,
    * mwp[0]) prep(gov,mwp[1]) pobj|pcomp(mwp[1], compl) -&gt;
    * prep_mwp[0]_mwp[1](gov, compl)
-   * <p/>
+   * <br>
    *
    * @param list
    *          List of typedDependencies to work on
@@ -1781,22 +1781,22 @@ public class EnglishGrammaticalStructure extends GrammaticalStructure  {
   }
 
   /**
-   * Collapse 3-word preposition of the following format: <br/>
-   * This will be the case when the preposition is analyzed as a NP <br/>
-   * prep(gov, mwp0) <br/>
-   * X(mwp0,mwp1) <br/>
-   * X(mwp1,mwp2) <br/>
-   * pobj|pcomp(mwp2, compl) <br/>
+   * Collapse 3-word preposition of the following format: <br>
+   * This will be the case when the preposition is analyzed as a NP <br>
+   * prep(gov, mwp0) <br>
+   * X(mwp0,mwp1) <br>
+   * X(mwp1,mwp2) <br>
+   * pobj|pcomp(mwp2, compl) <br>
    * -&gt; prep_mwp[0]_mwp[1]_mwp[2](gov, compl)
-   * <p/>
+   * <br>
    *
-   * It also takes flat annotation into account: <br/>
-   * prep(gov,mwp0) <br/>
-   * X(mwp0,mwp1) <br/>
-   * X(mwp0,mwp2) <br/>
-   * pobj|pcomp(mwp0, compl) <br/>
+   * It also takes flat annotation into account: <br>
+   * prep(gov,mwp0) <br>
+   * X(mwp0,mwp1) <br>
+   * X(mwp0,mwp2) <br>
+   * pobj|pcomp(mwp0, compl) <br>
    * -&gt; prep_mwp[0]_mwp[1]_mwp[2](gov, compl)
-   * <p/>
+   * <br>
    *
    *
    * @param list List of typedDependencies to work on
@@ -2036,7 +2036,7 @@ public class EnglishGrammaticalStructure extends GrammaticalStructure  {
    * Collapse multi-words preposition of the following format, which comes from
    * flat annotation. This handles e.g., "because of" (PP (IN because) (IN of)
    * ...), "such as" (PP (JJ such) (IN as) ...)
-   * <p/>
+   * <br>
    * prep(gov, mwp[1]) dep(mpw[1], mwp[0]) pobj(mwp[1], compl) -&gt;
    * prep_mwp[0]_mwp[1](gov, compl)
    *

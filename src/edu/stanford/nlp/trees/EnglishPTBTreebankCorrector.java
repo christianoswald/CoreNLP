@@ -16,7 +16,7 @@ import edu.stanford.nlp.util.logging.Redwood;
 
 /** Correct some of the errors in the LDC99T42 Penn Treebank 3.
  *  You can use this class from {@link edu.stanford.nlp.trees.Treebanks} via a command like: <p>
- *  {@code java edu.stanford.nlp.trees.Treebanks -pennPrint LDC99T42-Treebank3/parsed/mrg/wsj 200-2199 > train-fixed}
+ *  {@code java edu.stanford.nlp.trees.Treebanks -correct -pennPrint LDC99T42-Treebank3/parsed/mrg/wsj 200-2199 > train-fixed}
  */
 public class EnglishPTBTreebankCorrector implements TreebankTransformer  {
 
@@ -850,6 +850,29 @@ public class EnglishPTBTreebankCorrector implements TreebankTransformer  {
     "relabel bad VBP\n" +
             '\n') +
 
+    // a few trees start with "Either way", etc but get labeled as if they
+    // were Either X or Y, or in one case, labeled completely randomly
+    ("/CC|NNP/=bad < /Either|Neither/ !$++ CC\n" +
+     "relabel bad DT\n" +
+     '\n') +
+
+    // there are a bunch of lowercase either which are also mislabeled,
+    // but with RB for either X or Y
+    // TODO: there are also some trees with ADVP < RB < either
+    // with a deeper nested structure leading to a CC.
+    // "either structured in ways that create unnecessary burdens..."
+    // "either receive a percentage of cash flow, a percentage of ..."
+    // "either look for greater equity participation..."
+    ("/neither|either/ > (RB=bad $++ CC)\n" +
+     "relabel bad CC\n" +
+     '\n') +
+
+    // this is also wrong: all of the either X or Y constructions should be
+    // either_CC X or_CC Y
+    ("/Neither|neither|either/ > (DT=bad $++ CC)\n" +
+     "relabel bad CC\n" +
+     '\n') +
+
     /* ----------------------------
        tregex3 -f -w '@VP < NN' | & less
 
@@ -1172,6 +1195,10 @@ public class EnglishPTBTreebankCorrector implements TreebankTransformer  {
     ("@ADVP < (RP=bad < around|before)\n" +
     "relabel bad RB\n" +
             '\n') +
+
+    ("before|after > (RB=bad > @SBAR $+ @S)\n" +
+     "relabel bad IN\n" +
+     '\n') +
 
     ("@ADVP=bad <1 PRT !<2 __\n" +
     "excise bad bad\n" +

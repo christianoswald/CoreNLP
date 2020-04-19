@@ -12,6 +12,7 @@ import edu.stanford.nlp.international.spanish.process.SpanishTokenizer;
 import edu.stanford.nlp.international.french.process.FrenchTokenizer;
 import edu.stanford.nlp.util.Generics;
 import edu.stanford.nlp.util.PropertiesUtils;
+import edu.stanford.nlp.util.ReflectionLoading;
 import edu.stanford.nlp.util.logging.Redwood;
 
 
@@ -40,10 +41,10 @@ public class TokenizerAnnotator implements Annotator  {
     Unspecified(null, null, "invertible,ptb3Escaping=true"),
     Arabic     ("ar", null, ""),
     Chinese    ("zh", null, ""),
-    Spanish    ("es", "SpanishTokenizer", "invertible,ptb3Escaping=true,splitAll=true"),
-    English    ("en", "PTBTokenizer", "invertible,ptb3Escaping=true"),
-    German     ("de", null, "invertible,ptb3Escaping=true"),
-    French     ("fr", "FrenchTokenizer", ""),
+    Spanish    ("es", "SpanishTokenizer", SpanishTokenizer.DEFAULT_OPTIONS),
+    English    ("en", "PTBTokenizer", "invertible"),
+    German     ("de", null, "invertible,ptb3Escaping=false,splitHyphenated=true"),
+    French     ("fr", "FrenchTokenizer", FrenchTokenizer.DEFAULT_OPTIONS),
     Whitespace (null, "WhitespaceTokenizer", "");
 
     private final String abbreviation;
@@ -93,7 +94,7 @@ public class TokenizerAnnotator implements Annotator  {
      */
     public static TokenizerType getTokenizerType(Properties props) {
       String tokClass = props.getProperty("tokenize.class", null);
-      boolean whitespace = Boolean.valueOf(props.getProperty("tokenize.whitespace", "false"));
+      boolean whitespace = Boolean.parseBoolean(props.getProperty("tokenize.whitespace", "false"));
       String language = props.getProperty("tokenize.language", "en");
 
       if(whitespace) {
@@ -133,6 +134,9 @@ public class TokenizerAnnotator implements Annotator  {
   private final boolean useSegmenter;
   private final Annotator segmenterAnnotator;
 
+  /** run a custom post processor after the lexer **/
+  private final List<CoreLabelProcessor> postProcessors;
+
   // CONSTRUCTORS
 
   /** Gives a non-verbose, English tokenizer. */
@@ -143,19 +147,20 @@ public class TokenizerAnnotator implements Annotator  {
 
   private static String computeExtraOptions(Properties properties) {
     String extraOptions = null;
-    boolean keepNewline = Boolean.valueOf(properties.getProperty(StanfordCoreNLP.NEWLINE_SPLITTER_PROPERTY, "false")); // ssplit.eolonly
+    boolean keepNewline = Boolean.parseBoolean(properties.getProperty(StanfordCoreNLP.NEWLINE_SPLITTER_PROPERTY, "false")); // ssplit.eolonly
 
-    String hasSsplit = properties.getProperty("annotators");
-    if (hasSsplit != null && hasSsplit.contains(StanfordCoreNLP.STANFORD_SSPLIT)) { // ssplit
-      // Only possibly put in *NL* if not all one (the Boolean method treats null as false)
-      if ( ! Boolean.parseBoolean(properties.getProperty("ssplit.isOneSentence"))) {
-        // Set to { NEVER, ALWAYS, TWO_CONSECUTIVE } based on  ssplit.newlineIsSentenceBreak
-        String nlsbString = properties.getProperty(StanfordCoreNLP.NEWLINE_IS_SENTENCE_BREAK_PROPERTY,
-            StanfordCoreNLP.DEFAULT_NEWLINE_IS_SENTENCE_BREAK);
-        WordToSentenceProcessor.NewlineIsSentenceBreak nlsb = WordToSentenceProcessor.stringToNewlineIsSentenceBreak(nlsbString);
-        if (nlsb != WordToSentenceProcessor.NewlineIsSentenceBreak.NEVER) {
-          keepNewline = true;
-        }
+    // Only possibly put in *NL* if not never (the Boolean method treats null as false)
+    // We used to also check for ssplit annotator being present, but
+    // that was wrong in the case where a tokenizer model was
+    // preloaded (such as in the case of segmenters) and we didn't
+    // want to need to reload the model when the ssplit was later added.
+    if (!Boolean.parseBoolean(properties.getProperty("ssplit.isOneSentence"))) {
+      // Set to { NEVER, ALWAYS, TWO_CONSECUTIVE } based on  ssplit.newlineIsSentenceBreak
+      String nlsbString = properties.getProperty(StanfordCoreNLP.NEWLINE_IS_SENTENCE_BREAK_PROPERTY,
+                                                 StanfordCoreNLP.DEFAULT_NEWLINE_IS_SENTENCE_BREAK);
+      WordToSentenceProcessor.NewlineIsSentenceBreak nlsb = WordToSentenceProcessor.stringToNewlineIsSentenceBreak(nlsbString);
+      if (nlsb != WordToSentenceProcessor.NewlineIsSentenceBreak.NEVER) {
+        keepNewline = true;
       }
     }
     if (keepNewline) {
@@ -198,7 +203,7 @@ public class TokenizerAnnotator implements Annotator  {
       props = new Properties();
     }
     // check if segmenting must be done (Chinese or Arabic and not tokenizing on whitespace)
-    boolean whitespace = Boolean.valueOf(props.getProperty("tokenize.whitespace", "false"));
+    boolean whitespace = Boolean.parseBoolean(props.getProperty("tokenize.whitespace", "false"));
     if (props.getProperty("tokenize.language") != null &&
             LanguageInfo.isSegmenterLanguage(props.getProperty("tokenize.language"))
         && !whitespace) {
@@ -218,9 +223,28 @@ public class TokenizerAnnotator implements Annotator  {
       useSegmenter = false;
       segmenterAnnotator = null;
     }
+
+    // load any custom token post processing
+    String postProcessorClass = props.getProperty("tokenize.postProcessor", "");
+    List<CoreLabelProcessor> processors = new ArrayList<>();
+    try {
+      if (!postProcessorClass.equals("")) {
+        processors.add(ReflectionLoading.loadByReflection(postProcessorClass));
+      }
+    } catch (RuntimeException e) {
+      throw new RuntimeException("Loading: "+postProcessorClass+" failed with: "+e.getMessage());
+    }
+    if (PropertiesUtils.getBool(props, "tokenize.codepoint")) {
+      processors.add(new CodepointCoreLabelProcessor());
+    }
+    postProcessors = Collections.unmodifiableList(processors);
+
     VERBOSE = PropertiesUtils.getBool(props, "tokenize.verbose", verbose);
     TokenizerType type = TokenizerType.getTokenizerType(props);
     factory = initFactory(type, props, options);
+    if (VERBOSE) {
+      log.info("Initialized tokenizer factory: " + factory);
+    }
   }
 
   /**
@@ -269,7 +293,7 @@ public class TokenizerAnnotator implements Annotator  {
       break;
 
     case Whitespace:
-      boolean eolIsSignificant = Boolean.valueOf(props.getProperty(EOL_PROPERTY, "false"));
+      boolean eolIsSignificant = Boolean.parseBoolean(props.getProperty(EOL_PROPERTY, "false"));
       eolIsSignificant = eolIsSignificant || KEEP_NL_OPTION.equals(computeExtraOptions(props));
       factory = new WhitespaceTokenizer.WhitespaceTokenizerFactory<>(new CoreLabelTokenFactory(), eolIsSignificant);
       break;
@@ -331,7 +355,7 @@ public class TokenizerAnnotator implements Annotator  {
   @Override
   public void annotate(Annotation annotation) {
     if (VERBOSE) {
-      log.info("Tokenizing ... ");
+      log.info("Beginning tokenization");
     }
 
     // for Arabic and Chinese use a segmenter instead
@@ -360,16 +384,21 @@ public class TokenizerAnnotator implements Annotator  {
       // set indexes into document wide token list
       setTokenBeginTokenEnd(tokens);
 
+      // run post processing
+      for (CoreLabelProcessor postProcessor : postProcessors) {
+        tokens = postProcessor.process(tokens);
+      }
+
       // add tokens list to annotation
       annotation.set(CoreAnnotations.TokensAnnotation.class, tokens);
 
       if (VERBOSE) {
-        log.info("done.");
-        log.info("Tokens: " + annotation.get(CoreAnnotations.TokensAnnotation.class));
+        log.info("Tokenized: " + annotation.get(CoreAnnotations.TokensAnnotation.class));
       }
     } else {
       throw new RuntimeException("Tokenizer unable to find text in annotation: " + annotation);
     }
+
   }
 
   @Override

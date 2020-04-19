@@ -565,6 +565,52 @@ public class CoreLabel extends ArrayCoreMap implements AbstractCoreLabel, HasCat
   }
 
   /**
+   * Set value of IsNewlineAnnotation
+   *
+   * @return value of IsNewlineAnnotation
+   */
+  public void setIsNewline(boolean isNewline) {
+    set(CoreAnnotations.IsNewlineAnnotation.class, isNewline);
+  }
+
+  /**
+   * Get value of IsMultiWordToken
+   *
+   * @return value of IsMultiWordTokenAnnotation
+   */
+  public Boolean isMWT() {
+    return get(CoreAnnotations.IsMultiWordTokenAnnotation.class);
+  }
+
+  /**
+   * Get value of IsFirstWordOfMWT
+   *
+   * @return value of IsFirstMultiWordAnnotation
+   */
+  public Boolean isMWTFirst() {
+    return get(CoreAnnotations.IsFirstWordOfMWTAnnotation.class);
+  }
+
+  /**
+   * Set value of IsMultiWordToken
+   *
+   * @return
+   */
+  public void setIsMWT(boolean isMWT) {
+    set(CoreAnnotations.IsMultiWordTokenAnnotation.class, isMWT);
+  }
+
+  /**
+   * Set value of IsFirstWordOfMWT
+   *
+   * @return
+   */
+  public void setIsMWTFirst(boolean isFirstMWT) {
+    set(CoreAnnotations.IsFirstWordOfMWTAnnotation.class,
+        isFirstMWT);
+  }
+
+  /**
    * {@inheritDoc}
    */
   @Override
@@ -782,7 +828,7 @@ public class CoreLabel extends ArrayCoreMap implements AbstractCoreLabel, HasCat
       }
       break;
     case ALL:{
-      for(Class en: this.keySet()){
+      for (Class en: this.keySet()) {
         buf.append(';').append(en).append(':').append(this.get(en));
       }
       break;

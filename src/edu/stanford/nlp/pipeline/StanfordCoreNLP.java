@@ -64,9 +64,9 @@ import java.util.regex.Pattern;
  * you take the objects you wish to annotate and pass
  * them in and get in return a fully annotated object.
  * At the command-line level you can, e.g., tokenize text with StanfordCoreNLP with a command like:
- * <br/><pre>
+ * <br><pre>
  * java edu.stanford.nlp.pipeline.StanfordCoreNLP -annotators tokenize,ssplit -file document.txt
- * </pre><br/>
+ * </pre><br>
  * Please see the package level javadoc for sample usage
  * and a more complete description.
  *
@@ -85,7 +85,7 @@ import java.util.regex.Pattern;
 
 public class StanfordCoreNLP extends AnnotationPipeline  {
 
-  public enum OutputFormat { TEXT, XML, JSON, CONLL, CONLLU, SERIALIZED, CUSTOM }
+  public enum OutputFormat { TEXT, TAGGED, XML, JSON, CONLL, CONLLU, SERIALIZED, CUSTOM }
 
   private static String getDefaultExtension(OutputFormat outputFormat) {
     switch (outputFormat) {
@@ -94,6 +94,7 @@ public class StanfordCoreNLP extends AnnotationPipeline  {
       case CONLL: return ".conll";
       case CONLLU: return ".conllu";
       case TEXT: return ".out";
+      case TAGGED: return ".tag";
       case SERIALIZED: return ".ser.gz";
       case CUSTOM: return ".out";
       default: throw new IllegalArgumentException("Unknown output format " + outputFormat);
@@ -151,7 +152,7 @@ public class StanfordCoreNLP extends AnnotationPipeline  {
   public static final String NEWLINE_IS_SENTENCE_BREAK_PROPERTY = "ssplit.newlineIsSentenceBreak";
   public static final String DEFAULT_NEWLINE_IS_SENTENCE_BREAK = "never";
 
-  public static final String DEFAULT_OUTPUT_FORMAT = isXMLOutputPresent() ? "xml" : "text";
+  public static final String DEFAULT_OUTPUT_FORMAT = "text";
 
   /** A logger for this class */
   private static final Redwood.RedwoodChannels logger = Redwood.channels(StanfordCoreNLP.class);
@@ -275,7 +276,6 @@ public class StanfordCoreNLP extends AnnotationPipeline  {
     this.pipelineSetupTime = tim.report();
   }
 
-
   //
   // @Override-able methods to change pipeline behavior
   //
@@ -339,6 +339,9 @@ public class StanfordCoreNLP extends AnnotationPipeline  {
   }
 
   private static Properties loadProperties(String name, ClassLoader loader) {
+    // check if name represents a Stanford CoreNLP supported language
+    if (LanguageInfo.isStanfordCoreNLPSupportedLang(name))
+      name = LanguageInfo.getLanguagePropertiesFile(name);
     if(name.endsWith (PROPS_SUFFIX)) name = name.substring(0, name.length () - PROPS_SUFFIX.length ());
     name = name.replace('.', '/');
     name += PROPS_SUFFIX;
@@ -518,6 +521,8 @@ public class StanfordCoreNLP extends AnnotationPipeline  {
     pool.put(STANFORD_TOKENIZE, (props, impl) -> impl.tokenizer(props));
     pool.put(STANFORD_CLEAN_XML, (props, impl) -> impl.cleanXML(props));
     pool.put(STANFORD_SSPLIT, (props, impl) -> impl.wordToSentences(props));
+    pool.put(STANFORD_MWT, (props, impl) -> impl.multiWordToken(props));
+    pool.put(STANFORD_DOCDATE, (props, impl) -> impl.docDate(props));
     pool.put(STANFORD_POS, (props, impl) -> impl.posTagger(props));
     pool.put(STANFORD_LEMMA, (props, impl) -> impl.morpha(props, false));
     pool.put(STANFORD_NER, (props, impl) -> impl.ner(props));
@@ -605,8 +610,6 @@ public class StanfordCoreNLP extends AnnotationPipeline  {
     return pool;
   }
 
-
-
   public static synchronized Annotator getExistingAnnotator(String name) {
     Optional<Annotator> annotator = GLOBAL_ANNOTATOR_CACHE.entrySet().stream()
         .filter(entry -> name.equals(entry.getKey().name))
@@ -685,6 +688,15 @@ public class StanfordCoreNLP extends AnnotationPipeline  {
     Annotation annotation = new Annotation(text);
     annotate(annotation);
     return annotation;
+  }
+
+  /**
+   * Runs the entire pipeline on the content of the given text passed in.
+   * @param text The text to process
+   * @return An Annotation object containing the output of all annotators
+   */
+  public CoreDocument processToCoreDocument(String text) {
+    return new CoreDocument(process(text));
   }
 
   //
@@ -826,6 +838,7 @@ public class StanfordCoreNLP extends AnnotationPipeline  {
     os.println("\tIf annotator \"tokenize\" is defined:");
     os.println("\t\"tokenize.options\" - PTBTokenizer options (see edu.stanford.nlp.process.PTBTokenizer for details)");
     os.println("\t\"tokenize.whitespace\" - If true, just use whitespace tokenization");
+    os.println("\t\"tokenize.codepoint\" - If true, add codepoint offsets for counting non-BMP characters");
 
     os.println();
     os.println("\tIf annotator \"cleanxml\" is defined:");
@@ -843,6 +856,9 @@ public class StanfordCoreNLP extends AnnotationPipeline  {
     os.println("\t\"ner.model\" - paths for the ner models.  By default, the English 3 class, 7 class, and 4 class models are used.");
     os.println("\t\"ner.useSUTime\" - Whether or not to use sutime (English specific)");
     os.println("\t\"ner.applyNumericClassifiers\" - whether or not to use any numeric classifiers (English specific)");
+    os.println("\t\"ner.applyFineGrained\" - whether or not to apply fine grained regex NER annotation (English specific)");
+    os.println("\t\"ner.additional.tokensregex.rules\" - additional tokensregex rules to use for NER recognition");
+    os.println("\t\"ner.additional.regexner.mapping\" - additional regex rules to use for NER recognition");
 
     os.println();
     os.println("\tIf annotator \"truecase\" is defined:");
@@ -878,7 +894,7 @@ public class StanfordCoreNLP extends AnnotationPipeline  {
     os.println("\t             output is generated for every input file as file.outputExtension");
     os.println("\t\"outputDirectory\" - where to put output (defaults to the current directory)");
     os.println("\t\"outputExtension\" - extension to use for the output file (defaults to \".xml\" for XML, \".ser.gz\" for serialized).  Don't forget the dot!");
-    os.println("\t\"outputFormat\" - \"xml\" (usual default), \"text\" (default for REPL or if no XML), \"json\", \"conll\", \"conllu\", \"serialized\", or \"custom\"");
+    os.println("\t\"outputFormat\" - \"text\"  (default), \"tagged\", \"json\", \"conll\", \"conllu\", \"serialized\", \"xml\" or \"custom\"");
     os.println("\t\"customOutputter\" - specify a class to a custom outputter instead of a pre-defined output format");
     os.println("\t\"serializer\" - Class of annotation serializer to use when outputFormat is \"serialized\".  By default, uses ProtobufAnnotationSerializer.");
     os.println("\t\"replaceExtension\" - flag to chop off the last extension before adding outputExtension to file");
@@ -1006,6 +1022,9 @@ public class StanfordCoreNLP extends AnnotationPipeline  {
       case TEXT:
         new TextOutputter().print(annotation, fos, outputOptions);
         break;
+      case TAGGED:
+        new TaggedTextOutputter().print(annotation, fos, outputOptions);
+        break;
       case SERIALIZED:
         final String serializerClass = properties.getProperty("serializer", ProtobufAnnotationSerializer.class.getName());
         final String outputSerializerClass = properties.getProperty("outputSerializer", serializerClass);
@@ -1017,7 +1036,7 @@ public class StanfordCoreNLP extends AnnotationPipeline  {
         }
         break;
       case CONLLU:
-        new CoNLLUOutputter().print(annotation, fos, outputOptions);
+        new CoNLLUOutputter(properties).print(annotation, fos, outputOptions);
         break;
       case CUSTOM:
         AnnotationOutputter customOutputter = ReflectionLoading.loadByReflection(properties.getProperty("customOutputter"));

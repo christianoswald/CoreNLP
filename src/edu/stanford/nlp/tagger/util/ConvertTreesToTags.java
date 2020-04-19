@@ -21,6 +21,7 @@ import edu.stanford.nlp.tagger.io.TaggedFileRecord;
  * <p>
  * There are a few command line arguments available:
  * <table>
+ * <caption>Command line arguments</caption>
  * <tr>
  * <td> -output &lt;filename&gt; </td>
  * <td> File to output the data to </td>
@@ -119,11 +120,11 @@ public class ConvertTreesToTags  {
         inputFilenames.add(args[i]);
       }
     }
-    if (outputFilename.equals("")) {
+    if (outputFilename.isEmpty()) {
       log.info("Must specify an output filename, -output");
       System.exit(2);
     }
-    if (inputFilenames.size() == 0) {
+    if (inputFilenames.isEmpty()) {
       log.info("Must specify one or more input filenames");
       System.exit(2);
     }
