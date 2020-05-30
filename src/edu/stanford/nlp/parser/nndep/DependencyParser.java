@@ -11,6 +11,7 @@ import edu.stanford.nlp.ling.IndexedWord;
 import edu.stanford.nlp.ling.TaggedWord;
 import edu.stanford.nlp.ling.Word;
 import edu.stanford.nlp.process.DocumentPreprocessor;
+import edu.stanford.nlp.process.WhitespaceTokenizer;
 import edu.stanford.nlp.stats.Counter;
 import edu.stanford.nlp.stats.Counters;
 import edu.stanford.nlp.stats.IntCounter;
@@ -495,9 +496,7 @@ public class DependencyParser  {
    * @return Loaded and initialized (see {@link #initialize(boolean)} model
    */
   public static DependencyParser loadFromModelFile(String modelFile, Properties extraProperties) {
-    DependencyParser parser = extraProperties == null ? new DependencyParser() : new DependencyParser(extraProperties);
-    parser.loadModelFile(modelFile, false);
-    return parser;
+    return DependencyParserCache.loadFromModelFile(modelFile, extraProperties);
   }
 
   /** Load a parser model file, printing out some messages about the grammar in the file.
@@ -517,7 +516,7 @@ public class DependencyParser  {
     return firstLine.startsWith("language=");
   }
 
-  private void loadModelFile(String modelFile, boolean verbose) {
+  void loadModelFile(String modelFile, boolean verbose) {
     Timing t = new Timing();
     try (BufferedReader input = IOUtils.readerFromString(modelFile)) {
 
@@ -1139,7 +1138,12 @@ public class DependencyParser  {
     preprocessor.setSentenceFinalPuncWords(config.tlp.sentenceFinalPunctuationWords());
     preprocessor.setEscaper(config.escaper);
     preprocessor.setSentenceDelimiter(config.sentenceDelimiter);
-    preprocessor.setTokenizerFactory(config.tlp.getTokenizerFactory());
+    if (config.preTokenized) {
+      preprocessor.setTokenizerFactory(
+          edu.stanford.nlp.process.WhitespaceTokenizer.factory());
+    } else {
+      preprocessor.setTokenizerFactory(config.tlp.getTokenizerFactory());
+    }
 
     Timing timer = new Timing();
 

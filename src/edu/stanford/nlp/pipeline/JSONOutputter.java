@@ -47,7 +47,8 @@ public class JSONOutputter extends AnnotationOutputter {
 
 
   /** {@inheritDoc} */
-  @SuppressWarnings("RedundantCast")  // It's lying; we need the "redundant" casts (as of 2014-09-08)
+  @SuppressWarnings({"RedundantCast", "RedundantSuppression"})
+  // It's lying; we need the "redundant" casts (as of 2014-09-08)
   @Override
   public void print(Annotation doc, OutputStream target, Options options) throws IOException {
     PrintWriter writer = new PrintWriter(IOUtils.encodedOutputStreamWriter(target, options.encoding));
@@ -181,6 +182,11 @@ public class JSONOutputter extends AnnotationOutputter {
               l3.set("lemma", token.lemma());
               l3.set("characterOffsetBegin", token.beginPosition());
               l3.set("characterOffsetEnd", token.endPosition());
+              if (token.containsKey(CoreAnnotations.CodepointOffsetBeginAnnotation.class) &&
+                  token.containsKey(CoreAnnotations.CodepointOffsetEndAnnotation.class)) {
+                l3.set("codepointOffsetBegin", token.beginPosition());
+                l3.set("codepointOffsetEnd", token.endPosition());
+              }
               l3.set("pos", token.tag());
               l3.set("ner", token.ner());
               l3.set("normalizedNER", token.get(CoreAnnotations.NormalizedNamedEntityTagAnnotation.class));
@@ -323,7 +329,8 @@ public class JSONOutputter extends AnnotationOutputter {
   /**
    * Convert a dependency graph to a format expected as input to {@link Writer#set(String, Object)}.
    */
-  @SuppressWarnings("RedundantCast")  // It's lying; we need the "redundant" casts (as of 2014-09-08)
+  @SuppressWarnings({"RedundantCast", "RedundantSuppression"})
+  // It's lying; we need the "redundant" casts (as of 2014-09-08)
   private static Object buildDependencyTree(SemanticGraph graph) {
     if(graph != null) {
       return Stream.concat(
