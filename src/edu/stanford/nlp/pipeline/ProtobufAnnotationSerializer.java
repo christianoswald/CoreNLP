@@ -16,6 +16,7 @@ import edu.stanford.nlp.ling.Word;
 import edu.stanford.nlp.naturalli.*;
 import edu.stanford.nlp.neural.rnn.RNNCoreAnnotations;
 import edu.stanford.nlp.quoteattribution.ChapterAnnotator;
+import edu.stanford.nlp.quoteattribution.QuoteAttributionUtils.EnhancedSentenceAnnotation;
 import edu.stanford.nlp.semgraph.SemanticGraph;
 import edu.stanford.nlp.semgraph.SemanticGraphEdge;
 import edu.stanford.nlp.sentiment.SentimentCoreAnnotations;
@@ -386,6 +387,9 @@ public class ProtobufAnnotationSerializer extends AnnotationSerializer {
     if (keySet.contains(ChineseSegAnnotation.class)) { builder.setChineseSeg(getAndRegister(coreLabel, keysToSerialize, ChineseSegAnnotation.class)); }
     if (keySet.contains(SegmenterCoreAnnotations.XMLCharAnnotation.class)) { builder.setChineseXMLChar(getAndRegister(coreLabel, keysToSerialize, SegmenterCoreAnnotations.XMLCharAnnotation.class)); }
 
+    // Arabic character related stuff
+    if (keySet.contains(ArabicSegAnnotation.class)) { builder.setArabicSeg(getAndRegister(coreLabel, keysToSerialize, ArabicSegAnnotation.class)); }
+
     // French tokens potentially have ParentAnnotation
     if (keySet.contains(ParentAnnotation.class)) { builder.setParent(getAndRegister(coreLabel, keysToSerialize, ParentAnnotation.class)); }
 
@@ -603,7 +607,13 @@ public class ProtobufAnnotationSerializer extends AnnotationSerializer {
 
     // add boolean flag if sentence is quoted
     if (keySet.contains(QuotedAnnotation.class)) builder.setSectionQuoted(getAndRegister(sentence, keysToSerialize, QuotedAnnotation.class));
-
+    // quote annotator can also add an "enhanced sentence" if multiple sentences are treated as a single sentence
+    if (keySet.contains(EnhancedSentenceAnnotation.class)) {
+      keysToSerialize.remove(EnhancedSentenceAnnotation.class);
+      CoreMap enhanced = sentence.get(EnhancedSentenceAnnotation.class);
+      builder.setEnhancedSentence(toProto(enhanced));
+    }
+    
     // add chapter index if there is one
     if (keySet.contains(ChapterAnnotator.ChapterAnnotation.class)) builder.setChapterIndex(getAndRegister(sentence, keysToSerialize, ChapterAnnotator.ChapterAnnotation.class));
 
@@ -622,6 +632,7 @@ public class ProtobufAnnotationSerializer extends AnnotationSerializer {
   public CoreNLPProtos.Document toProto(Annotation doc) {
     Set<Class<?>> keysToSerialize = new HashSet<>(doc.keySet());
     keysToSerialize.remove(TokensAnnotation.class);  // note(gabor): tokens are saved in the sentence
+    keysToSerialize.remove(UseMarkedDiscourseAnnotation.class);  // this is only used as internal communication between annotators?
     CoreNLPProtos.Document.Builder builder = toProtoBuilder(doc, keysToSerialize);
     // Completeness Check
     if (enforceLosslessSerialization && !keysToSerialize.isEmpty()) {
@@ -1392,6 +1403,9 @@ public class ProtobufAnnotationSerializer extends AnnotationSerializer {
     if (proto.hasChineseSeg()) { word.set(ChineseSegAnnotation.class, proto.getChineseSeg()) ; }
     if (proto.hasChineseXMLChar()) { word.set(SegmenterCoreAnnotations.XMLCharAnnotation.class, proto.getChineseXMLChar()); }
 
+    // Arabic char info
+    if (proto.hasArabicSeg()) { word.set(ArabicSegAnnotation.class, proto.getArabicSeg()) ; }
+
     // Non-default annotators
     if (proto.hasGender()) { word.set(CoreAnnotations.GenderAnnotation.class, proto.getGender()); }
     if (proto.hasTrueCase()) { word.set(TrueCaseAnnotation.class, proto.getTrueCase()); }
@@ -1523,8 +1537,7 @@ public class ProtobufAnnotationSerializer extends AnnotationSerializer {
     }
     // Add chinese characters
     if (proto.getCharacterCount() > 0) {
-      List<CoreLabel> sentenceCharacters =
-              proto.getCharacterList().stream().map(this::fromProto).collect(Collectors.toList());
+      List<CoreLabel> sentenceCharacters = proto.getCharacterList().stream().map(this::fromProto).collect(Collectors.toList());
       lossySentence.set(SegmenterCoreAnnotations.CharactersAnnotation.class, sentenceCharacters);
     }
     // Add text -- missing by default as it's populated from the Document
@@ -2514,7 +2527,7 @@ public class ProtobufAnnotationSerializer extends AnnotationSerializer {
    * @param proto The serialized protocol buffer to read from.
    * @return A timex, with as much information filled in as was gleaned from the protocol buffer.
    */
-  private Timex fromProto(CoreNLPProtos.Timex proto) {
+  private static Timex fromProto(CoreNLPProtos.Timex proto) {
     return new Timex(
         proto.hasType() ? proto.getType() : null,
         proto.hasValue() ? proto.getValue() : null,

@@ -85,7 +85,7 @@ import java.util.regex.Pattern;
 
 public class StanfordCoreNLP extends AnnotationPipeline  {
 
-  public enum OutputFormat { TEXT, TAGGED, XML, JSON, CONLL, CONLLU, SERIALIZED, CUSTOM }
+  public enum OutputFormat { TEXT, TAGGED, XML, JSON, CONLL, CONLLU, INLINEXML, SERIALIZED, CUSTOM }
 
   private static String getDefaultExtension(OutputFormat outputFormat) {
     switch (outputFormat) {
@@ -95,6 +95,7 @@ public class StanfordCoreNLP extends AnnotationPipeline  {
       case CONLLU: return ".conllu";
       case TEXT: return ".out";
       case TAGGED: return ".tag";
+      case INLINEXML: return ".inxml";
       case SERIALIZED: return ".ser.gz";
       case CUSTOM: return ".out";
       default: throw new IllegalArgumentException("Unknown output format " + outputFormat);
@@ -1038,6 +1039,9 @@ public class StanfordCoreNLP extends AnnotationPipeline  {
       case CONLLU:
         new CoNLLUOutputter(properties).print(annotation, fos, outputOptions);
         break;
+      case INLINEXML:
+        new InlineXMLOutputter().print(annotation, fos, outputOptions);
+        break;
       case CUSTOM:
         AnnotationOutputter customOutputter = ReflectionLoading.loadByReflection(properties.getProperty("customOutputter"));
         customOutputter.print(annotation, fos, outputOptions);
@@ -1405,6 +1409,12 @@ public class StanfordCoreNLP extends AnnotationPipeline  {
     }
     // Run the pipeline
     StanfordCoreNLP pipeline = new StanfordCoreNLP(props);
+    if (PropertiesUtils.getBool(props, "memoryUsage", false)) {
+      System.gc();
+      System.gc();
+      logger.info("Finished loading pipeline.  Current memory usage: " +
+                  SystemUtils.getMemoryInUse() + "mb");
+    }
     pipeline.run(true);
   }
 
